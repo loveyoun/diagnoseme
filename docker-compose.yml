@@ -1,0 +1,52 @@
+services:
+  db:
+    build: ./Dockerfiles/postgres
+    container_name: db
+    env_file: .env
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-db:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-admin} -d ${POSTGRES_DB:-dm}" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - dm-network
+
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: pgadmin
+    profiles: [ "debug" ]
+    environment:
+      - PGADMIN_DEFAULT_EMAIL=${PGADMIN_EMAIL:-admin@admin.com}
+      - PGADMIN_DEFAULT_PASSWORD=${PGADMIN_PASSWORD:-admin}
+      # 브라우저에서 로그인, 서버 등록을 수동으로 안 하게
+      - PGADMIN_CONFIG_SERVER_MODE=False
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+      - ./scripts/pgadmin/servers.json:/pgadmin4/servers.json
+      - ./scripts/pgadmin/.pgpass:/tmp/pgpassfile
+    # pgAdmin이 비번 파일을 읽을 수 있게 권한을 강제로 부여하는 명령어 추가
+    entrypoint: >
+      /bin/sh -c "
+      cp /tmp/pgpassfile /var/lib/pgadmin/pgpass &&
+      chmod 600 /var/lib/pgadmin/pgpass &&
+      /entrypoint.sh"
+    ports:
+      - "${PGADMIN_PORT:-18080}:80"
+    depends_on:
+      db:
+        condition: service_healthy  # DB가 준비(Healthcheck 통과)된 후 실행
+    restart: unless-stopped
+    networks:
+      - dm-network
+
+volumes:
+  postgres_data:
+  pgadmin_data:
+
+networks:
+  dm-network:
+    driver: bridge

@@ -5,21 +5,30 @@ COLOR_BLUE=$(tput setaf 4)
 COLOR_RED=$(tput setaf 1)
 COLOR_NC=$(tput sgr0)  # reset color
 
-cd "$(dirname "$(realpath "$0")")/.."  # symbolic link "$0"
-
-echo "${COLOR_BLUE}Starting black${COLOR_NC}"
-uv run black .
-echo "OK"
+cd "$(dirname "$(realpath "$0")")/.."  # instead of symbolic link "$0"
 
 echo "${COLOR_BLUE}Start Ruff Auto Fix${COLOR_NC}"
 uv run ruff check --select I --fix . || true
 echo "${COLOR_GREEN}Auto-fix Done${COLOR_NC}"
 
+echo "${COLOR_BLUE}Check remaining issues${COLOR_NC}"
+if ! uv run ruff check .; then
+  echo ""
+  echo "${COLOR_RED}✖ Ruff found issues that could NOT be auto-fixed.${COLOR_NC}"
+  echo "${COLOR_RED}Please fix the issues above manually and re-run the command.${COLOR_NC}"
+  exit 1
+fi
+
+# code format은 black 기준으로
+echo "${COLOR_BLUE}Starting black${COLOR_NC}"
+uv run black .
+echo "OK"
+
 echo "${COLOR_BLUE}Run Mypy${COLOR_NC}"
 if ! uv run mypy . ; then
   echo ""
   echo "${COLOR_RED}✖ Mypy found issues.${COLOR_NC}"
-  echo "${COLOR_RED}→ Please fix the issues above manually and re-run the command.${COLOR_NC}"
+  echo "${COLOR_RED}Please fix the issues above manually and re-run the command.${COLOR_NC}"
   exit 1
 fi
 
