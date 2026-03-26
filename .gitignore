@@ -1,0 +1,33 @@
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+.venv
+.python-version
+
+# Env files
+.env
+.env*
+*.env
+.*.env
+envs/*.env
+!*example*.env
+!*template*.env
+
+# IDE
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test / Unit Test / Coverage
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.coverage
+*.coverage
+.coverage.*
+coverage.xml
