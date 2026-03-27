@@ -39,4 +39,4 @@ def initialize_tortoise(app: FastAPI) -> None:
     # import 타이밍 이슈: 모델 메타데이터를 선등록
     Tortoise.init_models(TORTOISE_APP_MODELS, "models")
     # app lifespan과 DB lifecycle 연결
-    register_tortoise(app, config=TORTOISE_ORM)
+    register_tortoise(app, config=TORTOISE_ORM, generate_schemas=False)

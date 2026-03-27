@@ -34,11 +34,13 @@ COPY ./scripts/init-db ./scripts/init-db
 # 스크립트 실행 권한 부여
 #COPY ./scripts/entrypoint.sh ./scripts/entrypoint.sh
 #RUN chmod +x /app/scripts/entrypoint.sh
+
 # non-root 유저 생성 (보안)
+# migrations 폴더 미리 생성하고 app-user 소유로 지정
+RUN #mkdir -p /app/migrations && adduser --disabled-password --no-create-home app-user && chown -R app-user:app-user /app/migrations
 
 # non-root 유저로 전환 (이후 프로세스는 app-user 권한으로 실행)
-RUN adduser --disabled-password --no-create-home app-user
-USER app-user
+#USER app-user
 
 #EXPOSE 8000
 #CMD ["/scripts/entrypoint.sh"]
