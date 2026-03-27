@@ -8,6 +8,7 @@ dependencies = [
     "aerich>=0.8.1",
     "asyncpg>=0.31.0",
     "fastapi[standard]>=0.135.2",
+    "python-jose[cryptography]>=3.5.0",
     "tomli-w>=1.2.0",
     "tortoise-orm>=1.1.7",
 ]
@@ -23,7 +24,7 @@ dev = [
 ]
 
 [tool.aerich]
-tortoise_config = "app.db.database.TORTOISE_ORM"
+tortoise_orm = "app.db.database.TORTOISE_ORM"
 location = "./migrations"
 
 [tool.black]
