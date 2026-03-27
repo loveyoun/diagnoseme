@@ -31,15 +31,15 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 COPY ./app ./app
 COPY ./scripts/init-db ./scripts/init-db
 
-# non-root 유저 생성 (보안)
-RUN adduser --disabled-password --no-create-home app-user
-
-# non-root 유저로 전환 (이후 프로세스는 app-user 권한으로 실행)
-USER app-user
-
 # 스크립트 실행 권한 부여
 #COPY ./scripts/entrypoint.sh ./scripts/entrypoint.sh
 #RUN chmod +x /app/scripts/entrypoint.sh
+# non-root 유저 생성 (보안)
+
+# non-root 유저로 전환 (이후 프로세스는 app-user 권한으로 실행)
+RUN adduser --disabled-password --no-create-home app-user
+USER app-user
+
 #EXPOSE 8000
 #CMD ["/scripts/entrypoint.sh"]
 
