@@ -26,16 +26,18 @@ dev = [
 [tool.aerich]
 tortoise_orm = "app.db.database.TORTOISE_ORM"
 location = "./migrations"
+src_folder = "./."
 
 [tool.black]
 line-length = 120
 
 [tool.mypy]
-plugins = ["pydantic.mypy"]  # mypy가 pydantic model의 타입 에러를 더 잘 잡아주도록 하는 플러그인
+plugins = [
+    "pydantic.mypy",
+]
 python_version = 3.14
-strict = true  # type hint
+strict = true
 
 [tool.pytest.ini_options]
-asyncio_mode = "auto"  # async fixture / 테스트 @pytest.mark.asyncio 없어도 실행
-asyncio_default_fixture_loop_scope = "session"  # event loop scope(생명주기) <-> function
-
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "session"

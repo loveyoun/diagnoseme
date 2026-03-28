@@ -1,20 +1,4 @@
 services:
-  app:
-    build:
-      context: .
-      dockerfile: ./Dockerfiles/app/Dockerfile
-    container_name: app
-    ports:
-      - "8000:8000"
-    env_file:
-      - .env
-    depends_on:
-      db:
-        condition: service_healthy
-    restart: unless-stopped
-    networks:
-      - dm-network
-
   db:
     build: ./Dockerfiles/postgres
     container_name: db
@@ -22,6 +6,8 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./scripts/init-db:/docker-entrypoint-initdb.d
+    ports:
+      - "${DB_PORT:-5432}:5432"
     healthcheck:
       test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-admin} -d ${POSTGRES_DB:-dm}" ]
       interval: 5s
