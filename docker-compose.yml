@@ -10,9 +10,29 @@ services:
       - "${DB_PORT:-5432}:5432"
     healthcheck:
       test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-admin} -d ${POSTGRES_DB:-dm}" ]
-      interval: 5s
+      interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - dm-network
+
+  redis:
+    image: redis:alpine
+    container_name: redis
+    volumes:
+      - ./utils/redis/redis.conf:/usr/local/etc/redis/redis.conf  # 로컬 파일을 컨테이너로 복사
+    command: redis-server /usr/local/etc/redis/redis.conf  # 설정 파일을 읽으며 실행
+    # 보안: 외부 접속을 차단하고 서버 로컬(127.0.0.1)에서만 접근 허용
+    ports:
+      - "127.0.0.1:${REDIS_PORT:-6379}:6379"
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
     restart: unless-stopped
     networks:
       - dm-network
