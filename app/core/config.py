@@ -1,6 +1,6 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-# __init__.py로 싱글톤 유지
+# __init__.py에서 싱글톤 유지
 class Config(BaseSettings):
     # extra: 일단 그외 정보 받아주기
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="allow", json=True)
@@ -18,3 +18,7 @@ class Config(BaseSettings):
     SECRET_KEY: str
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
+
+    REDIS_HOST: str
+    REDIS_PORT: int = 6379
+    REDIS_PASSWORD: int

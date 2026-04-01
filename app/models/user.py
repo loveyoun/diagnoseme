@@ -19,7 +19,8 @@ class UserRole(models.Model):
 
 class User(Common):
     id = fields.BigIntField(primary_key=True)
-    hashed_password = fields.CharField(max_length=128)
+    naver_id = fields.CharField(max_length=255, unique=True, null=True)
+    hashed_password = fields.CharField(max_length=128, null=True)
     phone_number = fields.CharField(max_length=20, unique=True)
 
     name = fields.CharField(max_length=30)

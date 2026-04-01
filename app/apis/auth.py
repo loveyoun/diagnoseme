@@ -1,14 +1,72 @@
-import httpx
 import secrets
-from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import RedirectResponse
+from datetime import datetime
+
+import httpx
+from fastapi import APIRouter, HTTPException, Depends, status
 
 from app.core import config
-from app.core.security import create_access_token
-from app.models.user import User
-from app.schemas.auth import TokenResponse
+from app.core.redis import redis_client
+from app.core.security import create_access_token, verify_password, get_password_hash, oauth2_scheme
+from app.models.user import User, UserRole
+from app.schemas.auth import TokenResponse, UserSignup, UserSignin, UserResponse
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+
+# Redis connection for blacklisting
+# redis_client = Redis(host=config.REDIS_HOST, port=config.REDIS_PORT, decode_responses=True)
+
+@router.post("/signup", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+async def signup(data: UserSignup):
+    if await User.exists(phone_number=data.phone_number):
+        raise HTTPException(status_code=400, detail="Phone number already registered")
+
+    if await User.exists(nickname=data.nickname):
+        raise HTTPException(status_code=400, detail="Nickname already taken")
+
+    # Get or create default 'user' role
+    role, _ = await UserRole.get_or_create(code="user")
+
+    user = await User.create(
+        phone_number=data.phone_number,
+        hashed_password=get_password_hash(data.password),
+        name=data.name,
+        email=data.email,
+        nickname=data.nickname,
+        gender=data.gender,
+        birthday=data.birthday,
+        birthyear=data.birthyear,
+        role=role,
+    )
+    return user
+
+
+@router.post("/signin", response_model=TokenResponse)
+async def signin(data: UserSignin):
+    user = await User.get_or_none(phone_number=data.phone_number)
+    if not user or not user.hashed_password:
+        raise HTTPException(status_code=401, detail="Invalid phone number or password")
+
+    if not verify_password(data.password, user.hashed_password):
+        raise HTTPException(status_code=401, detail="Invalid phone number or password")
+
+    if not user.is_active:
+        raise HTTPException(status_code=401, detail="Account is disabled")
+
+    user.last_login_at = datetime.utcnow()
+    await user.save()
+
+    access_token = create_access_token(data={"sub": str(user.id)})
+    return TokenResponse(access_token=access_token)
+
+
+@router.post("/logout")
+async def logout(token: str = Depends(oauth2_scheme)):
+    # Simple blacklist logic using Redis
+    # In a real app, calculate TTL from token exp
+    await redis_client.set(f"blacklist:{token}", "1", ex=config.ACCESS_TOKEN_EXPIRE_MINUTES * 60)
+    return {"message": "Logged out successfully"}
+
 
 # 네이버 OAuth 엔드포인트 상수
 NAVER_AUTH_URL = "https://nid.naver.com/oauth2.0/authorize"
