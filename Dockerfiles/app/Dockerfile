@@ -8,11 +8,10 @@ WORKDIR /app
 ENV PYTHONUNBUFFERED=1
 # .pyc 파일 생성 안 함
 ENV PYTHONDONTWRITEBYTECODE=1
-# venv 없이 시스템에 직접 설치. 컨테이너 자체가 격리된 환경이라 시스템에 직접 깔아도 문제없음
-ENV UV_SYSTEM_PYTHON=1
 ENV PATH="/app/.venv/bin:$PATH"
 
-WORKDIR /app
+# venv 없이 시스템에 직접 설치. 컨테이너 자체가 격리된 환경이라 시스템에 직접 깔아도 문제없음
+#ENV UV_SYSTEM_PYTHON=1
 
 # 빌드 도구가 필요한 경우에만 설치 (C 확장 없으면 이 블록 제거 가능)
 RUN apt-get update \
@@ -23,9 +22,9 @@ RUN apt-get update \
 # 의존성 파일 먼저 복사 (캐싱 활용)
 COPY pyproject.toml uv.lock ./
 
-# BuildKit 캐시 마운트로 uv sync 캐시
+# BuildKit 캐시 마운트로 uv sync 캐시. --all-packages
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --all-packages --no-dev
+    uv sync --no-dev
 
 # 의존성 레이어 이후 → 코드 변경이 의존성 캐시에 영향 없음
 COPY ./app ./app
