@@ -1,5 +1,9 @@
+from datetime import datetime
 from enum import StrEnum
+from uuid import UUID
+
 from tortoise import fields, models
+
 from app.models.common import Common
 
 
@@ -11,31 +15,32 @@ class AppointmentStatus(StrEnum):
 
 
 class CancelReason(models.Model):
-    id = fields.SmallIntField(primary_key=True)
-    code = fields.CharField(max_length=50, unique=True)
+    id: int = fields.SmallIntField(primary_key=True)
+    code: str = fields.CharField(max_length=50, unique=True)
 
     class Meta:
         table = "cancel_reasons"
 
 
 class Appointment(Common):
-    id = fields.BigIntField(primary_key=True)
-    idempotency_key = fields.UUIDField(unique=True)
+    id: int = fields.BigIntField(primary_key=True)
+    idempotency_key: UUID = fields.UUIDField(unique=True)
 
-    slot = fields.ForeignKeyField("models.AppointmentSlot", related_name="appointments", on_delete=fields.RESTRICT)
-    user = fields.ForeignKeyField("models.User", related_name="appointments", on_delete=fields.RESTRICT)
+    slot: int = fields.ForeignKeyField("models.AppointmentSlot", related_name="appointments", on_delete=fields.RESTRICT)
+    user: int = fields.ForeignKeyField("models.User", related_name="appointments", on_delete=fields.RESTRICT)
 
-    hospital = fields.ForeignKeyField("models.Hospital", on_delete=fields.RESTRICT)
-    start_at = fields.DatetimeField()
-    end_at = fields.DatetimeField()
+    hospital: int = fields.ForeignKeyField("models.Hospital", on_delete=fields.RESTRICT)
+    start_at: datetime = fields.DatetimeField()
+    end_at: datetime = fields.DatetimeField()
 
-    status = fields.CharEnumField(enum_type=AppointmentStatus, default=AppointmentStatus.CONFIRMED)
+    status: AppointmentStatus = fields.CharEnumField(enum_type=AppointmentStatus, default=AppointmentStatus.CONFIRMED)
 
-    memo = fields.TextField(null=True)
+    memo: str | None = fields.TextField(null=True)
 
-    cancelled_at = fields.DatetimeField(null=True)
-    cancelled_by = fields.ForeignKeyField("models.User", related_name="cancelled_appointments", on_delete=fields.RESTRICT, null=True)
-    cancel_reason = fields.ForeignKeyField("models.CancelReason", on_delete=fields.SET_NULL, null=True)
+    cancelled_at: datetime | None = fields.DatetimeField(null=True)
+    cancelled_by: int | None = fields.ForeignKeyField("models.User", related_name="cancelled_appointments",
+                                                      on_delete=fields.RESTRICT, null=True)
+    cancel_reason: int | None = fields.ForeignKeyField("models.CancelReason", on_delete=fields.SET_NULL, null=True)
 
     class Meta:
         table = "appointments"
@@ -45,3 +50,5 @@ class Appointment(Common):
             ("hospital", "start_at"),  # 병원별 일자별 예약자 명단용
             ("slot", "status"),  # 슬롯 기준 예약 조회
         )
+
+

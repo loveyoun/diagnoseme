@@ -1,112 +1,74 @@
 import secrets
-from datetime import datetime
+from typing import Any
 
 import httpx
-from fastapi import APIRouter, HTTPException, Depends, status
+from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.core import config
-from app.core.redis import redis_client
-from app.core.security import create_access_token, verify_password, get_password_hash, oauth2_scheme
+from app.core.security import create_access_token, oauth2_scheme
+from app.models.auth import AuthProvider, SocialAccount
 from app.models.user import User, UserRole
-from app.schemas.auth import TokenResponse, UserSignup, UserSignin, UserResponse
+from app.schemas.auth import TokenResponse, UserSignin, SignUpRequest
+from app.schemas.user import UserResponse
+from app.services.auth import AuthService
+from app.services.user import UserService
 
-router = APIRouter(prefix="/auth", tags=["auth"])
+router = APIRouter(prefix="/auth", tags=["Auth"])
 
-
-# Redis connection for blacklisting
-# redis_client = Redis(host=config.REDIS_HOST, port=config.REDIS_PORT, decode_responses=True)
 
 @router.post("/signup", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
-async def signup(data: UserSignup):
-    if await User.exists(phone_number=data.phone_number):
-        raise HTTPException(status_code=400, detail="Phone number already registered")
-
-    if await User.exists(nickname=data.nickname):
-        raise HTTPException(status_code=400, detail="Nickname already taken")
-
-    # Get or create default 'user' role
-    role, _ = await UserRole.get_or_create(code="user")
-
-    user = await User.create(
-        phone_number=data.phone_number,
-        hashed_password=get_password_hash(data.password),
-        name=data.name,
-        email=data.email,
-        nickname=data.nickname,
-        gender=data.gender,
-        birthday=data.birthday,
-        birthyear=data.birthyear,
-        role=role,
-    )
-    return user
-
+async def signup(user_data: SignUpRequest) -> UserResponse:
+    return await AuthService.create(user_data)
 
 @router.post("/signin", response_model=TokenResponse)
-async def signin(data: UserSignin):
-    user = await User.get_or_none(phone_number=data.phone_number)
-    if not user or not user.hashed_password:
-        raise HTTPException(status_code=401, detail="Invalid phone number or password")
-
-    if not verify_password(data.password, user.hashed_password):
-        raise HTTPException(status_code=401, detail="Invalid phone number or password")
-
-    if not user.is_active:
-        raise HTTPException(status_code=401, detail="Account is disabled")
-
-    user.last_login_at = datetime.utcnow()
-    await user.save()
-
-    access_token = create_access_token(data={"sub": str(user.id)})
-    return TokenResponse(access_token=access_token)
+async def signin(user_data: UserSignin) -> TokenResponse:
+    return await AuthService.signin(user_data)
 
 
 @router.post("/logout")
-async def logout(token: str = Depends(oauth2_scheme)):
-    # Simple blacklist logic using Redis
-    # In a real app, calculate TTL from token exp
-    await redis_client.set(f"blacklist:{token}", "1", ex=config.ACCESS_TOKEN_EXPIRE_MINUTES * 60)
+async def logout(token: str = Depends(oauth2_scheme)) -> dict[str, str]:
+    await AuthService.logout(token)
     return {"message": "Logged out successfully"}
 
 
 # 네이버 OAuth 엔드포인트 상수
-NAVER_AUTH_URL = "https://nid.naver.com/oauth2.0/authorize"
-NAVER_TOKEN_URL = "https://nid.naver.com/oauth2.0/token"
-NAVER_PROFILE_URL = "https://openapi.naver.com/v1/nid/me"
+NAVER_AUTH_URL: str = "https://nid.naver.com/oauth2.0/authorize"
+NAVER_TOKEN_URL: str = "https://nid.naver.com/oauth2.0/token"
+NAVER_PROFILE_URL: str = "https://openapi.naver.com/v1/nid/me"
 
 
-# ① 로그인 시작 — 네이버 인증 페이지로 리다이렉트
+# 1. 로그인 시작 — 네이버 인증 페이지로 리다이렉트
 @router.get("/naver/login")
-async def naver_login():
-    state = secrets.token_urlsafe(16)  # CSRF 방지용 랜덤 state
+async def naver_login() -> dict[str, str]:
+    state: str = secrets.token_urlsafe(16)  # CSRF 방지용 랜덤 state
 
-    params = {
+    params: dict[str, str] = {
         "response_type": "code",
         "client_id": config.NAVER_CLIENT_ID,
         "redirect_uri": config.NAVER_REDIRECT_URI,
         "state": state,
     }
 
-    query_string = "&".join(f"{k}={v}" for k, v in params.items())
-    naver_url = f"{NAVER_AUTH_URL}?{query_string}"
+    query_string: str = "&".join(f"{k}={v}" for k, v in params.items())
+    naver_url: str = f"{NAVER_AUTH_URL}?{query_string}"
 
     return {"login_url": naver_url}
-    # return RedirectResponse(url=naver_url)
 
 
-# ② 콜백 — 네이버가 code와 state를 들고 여기로 돌아옴
+# 2. 콜백 — 네이버가 code와 state를 들고옴
 @router.get("/naver/callback", response_model=TokenResponse)
-async def naver_callback(code: str, state: str):
+async def naver_callback(code: str, state: str) -> TokenResponse:
     # Step 1: code → access_token 교환
-    naver_token = await _get_naver_token(code, state)
+    naver_token: str = await _get_naver_token(code, state)
 
     # Step 2: access_token → 사용자 프로필 조회
-    profile = await _get_naver_profile(naver_token)
+    profile: dict[str, Any] = await _get_naver_profile(naver_token)
 
-    # Step 3: DB에 유저 upsert (있으면 업데이트, 없으면 생성)
-    user = await _get_or_create_user(profile)
+    # Step 3: DB에 유저 및 소셜 계정 upsert
+    user: User = await _get_or_create_user(profile)
 
     # Step 4: 우리 서비스 JWT 발급
-    access_token = create_access_token(data={"sub": str(user.id)})
+    access_token: str = create_access_token(data={"sub": str(user.id)})
 
     return TokenResponse(access_token=access_token)
 
@@ -127,7 +89,7 @@ async def _get_naver_token(code: str, state: str) -> str:
             },
         )
 
-    data = response.json()
+    data: dict[str, Any] = response.json()
 
     if "access_token" not in data:
         raise HTTPException(
@@ -138,7 +100,7 @@ async def _get_naver_token(code: str, state: str) -> str:
     return data["access_token"]
 
 
-async def _get_naver_profile(access_token: str) -> dict:
+async def _get_naver_profile(access_token: str) -> dict[str, Any]:
     """네이버 프로필 API 호출"""
     async with httpx.AsyncClient() as client:
         response = await client.get(
@@ -146,7 +108,7 @@ async def _get_naver_profile(access_token: str) -> dict:
             headers={"Authorization": f"Bearer {access_token}"},
         )
 
-    data = response.json()
+    data: dict[str, Any] = response.json()
 
     if data.get("resultcode") != "00":
         raise HTTPException(
@@ -157,33 +119,39 @@ async def _get_naver_profile(access_token: str) -> dict:
     return data["response"]  # id, email, nickname, profile_image 포함
 
 
-async def _get_or_create_user(profile: dict) -> User:
-    """DB에서 유저 찾거나 새로 생성"""
-    naver_id = profile["id"]
+async def _get_or_create_user(profile: dict[str, Any]) -> User:
+    """DB에서 유저 찾거나 새로 생성 (SocialAccount 활용)"""
+    external_id: str = profile["id"]
+    provider, _ = await AuthProvider.get_or_create(code="naver")
 
-    user = await User.get_or_none(naver_id=naver_id)
+    social_account = await SocialAccount.get_or_none(
+        provider=provider,
+        external_id=external_id
+    ).select_related("user")
 
-    if user is None:
-        # 신규 유저 생성
+    if social_account:
+        user: User = social_account.user
+        # 기존 유저 정보 업데이트
+        return await UserService.update_user(user.id, user)
+    else:
+        # 신규 유저 및 소셜 계정 생성
+        # 기본 역할 설정 (예: 'user')
+        role, _ = await UserRole.get_or_create(code="user")
+        
         user = await User.create(
-            naver_id=naver_id,
             name=profile.get("name"),
             email=profile.get("email"),
             nickname=profile.get("nickname"),
-            gender=profile.get("gender"),  # "M", "F", "U" 중 하나
-            birthday=profile.get("birthday"),  # "10-22" 형식
-            birthyear=profile.get("birthyear"),  # "1995" 형식
+            gender=profile.get("gender"),
+            birthday=profile.get("birthday"),
+            birthyear=profile.get("birthyear"),
             profile_image=profile.get("profile_image"),
+            role=role
         )
-    else:
-        # 기존 유저 정보 업데이트 (닉네임/프사 변경 반영)
-        user.name = profile.get("name", user.name)
-        user.email = profile.get("email", user.email)
-        user.nickname = profile.get("nickname", user.nickname)
-        user.gender = profile.get("gender", user.gender)
-        user.birthday = profile.get("birthday", user.birthday)
-        user.birthyear = profile.get("birthyear", user.birthyear)
-        user.profile_image = profile.get("profile_image", user.profile_image)
-        await user.save()
+        await SocialAccount.create(
+            user=user,
+            provider=provider,
+            external_id=external_id
+        )
 
-    return user
+        return user
