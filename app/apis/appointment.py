@@ -1,21 +1,27 @@
-from datetime import datetime, date
 import asyncio
+from datetime import date, datetime
+from typing import Any
+
+from fastapi import APIRouter, Depends, HTTPException, status
 from redis.asyncio import Redis
-from fastapi import APIRouter, Depends, HTTPException, status, Query
 from tortoise.transactions import in_transaction
-from tortoise.expressions import Q
 
 from app.core import config
 from app.core.security import get_current_user
-from app.models.user import User
+from app.models.appointment import Appointment, AppointmentStatus
 from app.models.slot import AppointmentSlot
-from app.models.appointment import Appointment, AppointmentStatus, CancelReason
-from app.schemas.appointment import AppointmentCreate, AppointmentResponse, AppointmentCancel
+from app.models.user import User
+from app.schemas.appointment import (
+    AppointmentCancel,
+    AppointmentCreate,
+    AppointmentResponse,
+)
+from app.schemas.slot import AppointmentSlotResponse
 
-router = APIRouter(prefix="/appointments", tags=["appointments"])
+router = APIRouter(prefix="/appointments", tags=["Appointments"])
 
 # Redis connection pool
-redis_client = Redis(host=config.REDIS_HOST, port=config.REDIS_PORT, decode_responses=True)
+redis_client: Redis = Redis(host=config.REDIS_HOST, port=config.REDIS_PORT, decode_responses=True)
 
 @router.get("/slots")
 async def list_available_slots(
@@ -23,7 +29,7 @@ async def list_available_slots(
     doctor_id: int | None = None,
     start_date: date | None = None,
     end_date: date | None = None,
-):
+) -> list[AppointmentSlotResponse]:
     """
     List available appointment slots with filtering.
     """
@@ -38,16 +44,16 @@ async def list_available_slots(
     if end_date:
         query = query.filter(start_at__lte=datetime.combine(end_date, datetime.max.time()))
     
-    slots = await query.order_by("start_at").all()
+    slots: list[AppointmentSlot] = await query.order_by("start_at").all()
     return slots
 
 @router.post("/", response_model=AppointmentResponse, status_code=status.HTTP_201_CREATED)
 async def create_appointment(
     data: AppointmentCreate,
     user: User = Depends(get_current_user)
-):
+) -> AppointmentResponse:
     # 1. Idempotency Check (DB level)
-    existing = await Appointment.get_or_none(idempotency_key=data.idempotency_key)
+    existing: Appointment | None = await Appointment.get_or_none(idempotency_key=data.idempotency_key)
     if existing:
         return existing
 
@@ -56,11 +62,11 @@ async def create_appointment(
         raise HTTPException(status_code=400, detail="Already booked for this slot")
 
     # 3. Distributed Lock (Redis) to prevent race conditions on high traffic
-    lock_key = f"lock:slot:{data.slot_id}"
-    lock_value = f"{user.id}:{data.idempotency_key}"
+    lock_key: str = f"lock:slot:{data.slot_id}"
+    lock_value: str = f"{user.id}:{data.idempotency_key}"
     
     # Try to acquire lock for 10 seconds
-    acquired = await redis_client.set(lock_key, lock_value, ex=10, nx=True)
+    acquired: bool = await redis_client.set(lock_key, lock_value, ex=10, nx=True)
     if not acquired:
         # Retry logic or wait
         for _ in range(5):
@@ -74,8 +80,7 @@ async def create_appointment(
     try:
         async with in_transaction() as conn:
             # 4. Capacity Check and Reservation (DB Lock)
-            # select_for_update handles DB-level concurrency if multiple workers bypass Redis
-            slot = await AppointmentSlot.select_for_update().get_or_none(id=data.slot_id)
+            slot: AppointmentSlot | None = await AppointmentSlot.select_for_update().get_or_none(id=data.slot_id)
             if not slot:
                 raise HTTPException(status_code=404, detail="Slot not found")
             
@@ -86,7 +91,7 @@ async def create_appointment(
                 raise HTTPException(status_code=400, detail="No capacity left in this slot")
 
             # 5. Create Appointment
-            appointment = await Appointment.create(
+            appointment: Appointment = await Appointment.create(
                 idempotency_key=data.idempotency_key,
                 user=user,
                 slot=slot,
@@ -106,7 +111,7 @@ async def create_appointment(
 
     finally:
         # Release lock only if we were the one who held it
-        current_lock_val = await redis_client.get(lock_key)
+        current_lock_val: str | None = await redis_client.get(lock_key)
         if current_lock_val == lock_value:
             await redis_client.delete(lock_key)
 
@@ -115,9 +120,9 @@ async def cancel_appointment(
     appointment_id: int,
     data: AppointmentCancel,
     user: User = Depends(get_current_user)
-):
+) -> AppointmentResponse:
     async with in_transaction() as conn:
-        appointment = await Appointment.select_for_update().get_or_none(id=appointment_id, user=user)
+        appointment: Appointment | None = await Appointment.select_for_update().get_or_none(id=appointment_id, user=user)
         if not appointment:
             raise HTTPException(status_code=404, detail="Appointment not found")
 
@@ -125,7 +130,7 @@ async def cancel_appointment(
             return appointment
 
         # Increase slot remains
-        slot = await AppointmentSlot.select_for_update().get_or_none(id=appointment.slot_id)
+        slot: AppointmentSlot | None = await AppointmentSlot.select_for_update().get_or_none(id=appointment.slot_id)
         if slot:
             slot.remains += 1
             await slot.save(using_db=conn)

@@ -27,6 +27,9 @@ services:
     command: redis-server --requirepass ${REDIS_PASSWORD} --port ${REDIS_PORT} --bind 0.0.0.0
     env_file:
       - .env
+#    volumes:
+#      - ./scripts/redis/entrypoint.sh:/entrypoint.sh
+#    entrypoint: [ "/bin/sh", "/entrypoint.sh" ]
     # 보안: 외부 접속을 차단하고 서버 로컬(127.0.0.1)에서만 접근 허용
     ports:
       - "127.0.0.1:${REDIS_PORT:-6379}:6379"

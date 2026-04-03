@@ -1,15 +1,16 @@
 import json
+from typing import Any
 
 from redis.asyncio import Redis
 
 from app.core.redis import redis_client
 
-PERMISSION_CACHE_TTL = 60
+PERMISSION_CACHE_TTL: int = 60
 
 
 class PermissionCacheService:
-    def __init__(self, redis: Redis = redis_client):
-        self._redis = redis
+    def __init__(self, redis: Redis = redis_client) -> None:
+        self._redis: Redis = redis
 
     def _key(self, user_id: int) -> str:
         return f"permissions:{user_id}"
@@ -17,7 +18,7 @@ class PermissionCacheService:
     async def get(self, user_id: int) -> set[str] | None:
         """캐시된 권한을 조회합니다. 캐시 미스면 None."""
         try:
-            raw = await self._redis.get(self._key(user_id))
+            raw: str | bytes | None = await self._redis.get(self._key(user_id))
             if raw is not None:
                 return set(json.loads(raw))
             return None
@@ -30,7 +31,7 @@ class PermissionCacheService:
             await self._redis.setex(
                 self._key(user_id),
                 PERMISSION_CACHE_TTL,
-                json.dumps(sorted(permissions)),
+                json.dumps(sorted(list(permissions))),
             )
         except Exception:
             pass
@@ -43,4 +44,4 @@ class PermissionCacheService:
             pass
 
 
-permission_cache = PermissionCacheService()
+permission_cache: PermissionCacheService = PermissionCacheService()

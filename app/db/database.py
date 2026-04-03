@@ -1,3 +1,5 @@
+from typing import Any
+
 from fastapi import FastAPI
 from tortoise import Tortoise
 from tortoise.contrib.fastapi import register_tortoise
@@ -6,13 +8,13 @@ from app.core import config
 
 # Tortoise가 스캔할 모델 모듈 목록
 # aerich.models는 마이그레이션 이력 테이블 관리를 위해 반드시 포함
-TORTOISE_APP_MODELS = [
+TORTOISE_APP_MODELS: list[str] = [
     "aerich.models",
     "app.models",
 ]
 
 # ORM 설정
-TORTOISE_ORM = {
+TORTOISE_ORM: dict[str, Any] = {
     "connections": {
         "default": {
             "engine": "tortoise.backends.asyncpg",
