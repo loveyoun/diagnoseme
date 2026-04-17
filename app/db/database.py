@@ -24,6 +24,8 @@ TORTOISE_ORM: dict[str, Any] = {
                 "user": config.POSTGRES_USER,
                 "password": config.POSTGRES_PASSWORD,
                 "database": config.POSTGRES_DB,
+                "connect_timeout": config.CONNECT_TIMEOUT,
+                "maxsize": config.CONNECTION_POOL_MAXSIZE,
             },
         },
     },
@@ -33,7 +35,7 @@ TORTOISE_ORM: dict[str, Any] = {
             "default_connection": "default",
         },
     },
-    "timezone": "Asia/Seoul",
+    "timezone": config.TZ,
 }
 
 
@@ -42,3 +44,12 @@ def initialize_tortoise(app: FastAPI) -> None:
     Tortoise.init_models(TORTOISE_APP_MODELS, "models")
     # app lifespan과 DB lifecycle 연결
     register_tortoise(app, config=TORTOISE_ORM, generate_schemas=False)
+
+    # --- 아래 코드 추가 ---
+    @app.on_event("startup")
+    async def verify_db():
+        print("🔍 DB 연결 확인 시도 중...")
+        conn = Tortoise.get_connection("default")
+        result = await conn.execute_query_dict("SELECT 1")
+        print(f"✅ DB 연결 성공! 결과: {result}")
+    # -----------------------

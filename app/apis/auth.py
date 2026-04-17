@@ -6,9 +6,9 @@ from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.core import config
 from app.core.security import create_access_token, oauth2_scheme
-from app.models.auth import AuthProvider, SocialAccount
+from app.models.social import AuthProvider, SocialAccount
 from app.models.user import User, UserRole
-from app.schemas.auth import TokenResponse, UserSignin, SignUpRequest
+from app.schemas.auth import TokenResponse, SignInRequest, SignUpRequest
 from app.schemas.user import UserResponse
 from app.services.auth import AuthService
 from app.services.user import UserService
@@ -21,7 +21,7 @@ async def signup(user_data: SignUpRequest) -> UserResponse:
     return await AuthService.create(user_data)
 
 @router.post("/signin", response_model=TokenResponse)
-async def signin(user_data: UserSignin) -> TokenResponse:
+async def signin(user_data: SignInRequest) -> TokenResponse:
     return await AuthService.signin(user_data)
 
 
