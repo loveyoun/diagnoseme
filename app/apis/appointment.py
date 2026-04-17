@@ -9,7 +9,7 @@ from tortoise.transactions import in_transaction
 from app.core import config
 from app.core.security import get_current_user
 from app.models.appointment import Appointment, AppointmentStatus
-from app.models.slot import AppointmentSlot
+from app.models.slot import Slot
 from app.models.user import User
 from app.schemas.appointment import (
     AppointmentCancel,
@@ -33,7 +33,7 @@ async def list_available_slots(
     """
     List available appointment slots with filtering.
     """
-    query = AppointmentSlot.filter(is_active=True, remains__gt=0)
+    query = Slot.filter(is_active=True, remains__gt=0)
     
     if hospital_id:
         query = query.filter(hospital_id=hospital_id)
@@ -44,7 +44,7 @@ async def list_available_slots(
     if end_date:
         query = query.filter(start_at__lte=datetime.combine(end_date, datetime.max.time()))
     
-    slots: list[AppointmentSlot] = await query.order_by("start_at").all()
+    slots: list[Slot] = await query.order_by("start_at").all()
     return slots
 
 @router.post("/", response_model=AppointmentResponse, status_code=status.HTTP_201_CREATED)
@@ -80,7 +80,7 @@ async def create_appointment(
     try:
         async with in_transaction() as conn:
             # 4. Capacity Check and Reservation (DB Lock)
-            slot: AppointmentSlot | None = await AppointmentSlot.select_for_update().get_or_none(id=data.slot_id)
+            slot: Slot | None = await Slot.select_for_update().get_or_none(id=data.slot_id)
             if not slot:
                 raise HTTPException(status_code=404, detail="Slot not found")
             
@@ -130,7 +130,7 @@ async def cancel_appointment(
             return appointment
 
         # Increase slot remains
-        slot: AppointmentSlot | None = await AppointmentSlot.select_for_update().get_or_none(id=appointment.slot_id)
+        slot: Slot | None = await Slot.select_for_update().get_or_none(id=appointment.slot_id)
         if slot:
             slot.remains += 1
             await slot.save(using_db=conn)

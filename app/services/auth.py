@@ -15,7 +15,7 @@ from app.core import config
 from app.core.redis import redis_client  # access token blacklist
 from app.core.security import create_access_token, get_password_hash, verify_password
 from app.models.user import User, UserRole
-from app.schemas.auth import TokenResponse, UserSignin, SignUpRequest
+from app.schemas.auth import TokenResponse, SignInRequest, SignUpRequest
 
 
 class AuthService:
@@ -48,7 +48,7 @@ class AuthService:
             raise HTTPException(status_code=400, detail="Already registered")
 
     @staticmethod
-    async def signin(user_data: UserSignin) -> TokenResponse:
+    async def signin(user_data: SignInRequest) -> TokenResponse:
         user: User | None = await User.get_or_none(email=user_data.email)
 
         if not user or not user.hashed_password:

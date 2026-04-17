@@ -1,9 +1,11 @@
+from __future__ import annotations
+
 from datetime import datetime
 from enum import StrEnum
 
-from tortoise import fields, models
+from tortoise import fields
 
-from app.models.common import Common
+from app.models.commonmodel import CommonModel
 
 
 class Gender(StrEnum):
@@ -12,7 +14,7 @@ class Gender(StrEnum):
     U = "U"  # unknown
 
 
-class UserRole(models.Model):
+class UserRole(CommonModel):
     id: int = fields.SmallIntField(primary_key=True)
     code: str = fields.CharField(max_length=20, unique=True)
 
@@ -20,22 +22,28 @@ class UserRole(models.Model):
         table = "user_roles"
 
 
-class User(Common):
+class User(CommonModel):
     id: int = fields.BigIntField(primary_key=True)
-    hashed_password: str = fields.CharField(max_length=128)
-    email: str = fields.CharField(max_length=255, unique=True)
-    phone_number: str | None = fields.CharField(max_length=20, null=True)  # nullable
 
-    name: str = fields.CharField(max_length=30)
+    email: str = fields.CharField(max_length=255, unique=True)
+    hashed_password: str = fields.CharField(max_length=128)
+
+    name: str = fields.CharField(max_length=10)
     nickname: str = fields.CharField(max_length=10, unique=True)
+
+    # nullable. "" != NULL
+    phone_number: str | None = fields.CharField(max_length=20, null=True, default=None)
     gender: Gender = fields.CharEnumField(enum_type=Gender, default=Gender.U)  # default
+    # birthday: datetime | None = fields.DatetimeField(null=True, default=None)  # nullable
     birthday: str = fields.CharField(max_length=5)  # MM-DD
     birthyear: str = fields.CharField(max_length=4)  # YYYY
-    profile_image: str | None = fields.CharField(max_length=255, null=True)  # nullable
+    profile_image: str | None = fields.CharField(max_length=255, null=True, default=None)  # nullable
 
-    role: int = fields.ForeignKeyField("models.UserRole", on_delete=fields.RESTRICT)
+    role: fields.ForeignKeyRelation[UserRole] = fields.ForeignKeyField("models.UserRole", on_delete=fields.RESTRICT)
     is_active: bool = fields.BooleanField(default=True)  # default
-    last_login_at: datetime | None = fields.DatetimeField(null=True)
+    last_login_at: datetime | None = fields.DatetimeField(null=True, default=None)  # nullable
+
+    role_id: int
 
     class Meta:
         table = "users"
