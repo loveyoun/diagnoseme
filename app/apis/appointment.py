@@ -16,41 +16,18 @@ from app.schemas.appointment import (
     AppointmentRequest,
     AppointmentResponse,
 )
-from app.schemas.slot import AppointmentSlotResponse
+from app.schemas.slot import SlotResponse
 
 router = APIRouter(prefix="/appointments", tags=["Appointments"])
 
 # Redis connection pool
 redis_client: Redis = Redis(host=config.REDIS_HOST, port=config.REDIS_PORT, decode_responses=True)
 
-@router.get("/slots")
-async def list_available_slots(
-    hospital_id: int | None = None,
-    doctor_id: int | None = None,
-    start_date: date | None = None,
-    end_date: date | None = None,
-) -> list[AppointmentSlotResponse]:
-    """
-    List available appointment slots with filtering.
-    """
-    query = Slot.filter(is_active=True, remains__gt=0)
-    
-    if hospital_id:
-        query = query.filter(hospital_id=hospital_id)
-    if doctor_id:
-        query = query.filter(doctor_id=doctor_id)
-    if start_date:
-        query = query.filter(start_at__gte=datetime.combine(start_date, datetime.min.time()))
-    if end_date:
-        query = query.filter(start_at__lte=datetime.combine(end_date, datetime.max.time()))
-    
-    slots: list[Slot] = await query.order_by("start_at").all()
-    return slots
 
-@router.post("/", response_model=AppointmentResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=AppointmentResponse, status_code=status.HTTP_201_CREATED)
 async def create_appointment(
-    data: AppointmentRequest,
-    user: User = Depends(get_current_user)
+        data: AppointmentRequest,
+        user: User = Depends(get_current_user)
 ) -> AppointmentResponse:
     # 1. Idempotency Check (DB level)
     existing: Appointment | None = await Appointment.get_or_none(idempotency_key=data.idempotency_key)
@@ -64,7 +41,7 @@ async def create_appointment(
     # 3. Distributed Lock (Redis) to prevent race conditions on high traffic
     lock_key: str = f"lock:slot:{data.slot_id}"
     lock_value: str = f"{user.id}:{data.idempotency_key}"
-    
+
     # Try to acquire lock for 10 seconds
     acquired: bool = await redis_client.set(lock_key, lock_value, ex=10, nx=True)
     if not acquired:
@@ -83,7 +60,7 @@ async def create_appointment(
             slot: Slot | None = await Slot.select_for_update().get_or_none(id=data.slot_id)
             if not slot:
                 raise HTTPException(status_code=404, detail="Slot not found")
-            
+
             if not slot.is_active:
                 raise HTTPException(status_code=400, detail="Slot is not active")
 
@@ -115,14 +92,16 @@ async def create_appointment(
         if current_lock_val == lock_value:
             await redis_client.delete(lock_key)
 
+
 @router.post("/{appointment_id}/cancel", response_model=AppointmentResponse)
 async def cancel_appointment(
-    appointment_id: int,
-    data: AppointmentCancelRequest,
-    user: User = Depends(get_current_user)
+        appointment_id: int,
+        data: AppointmentCancelRequest,
+        user: User = Depends(get_current_user)
 ) -> AppointmentResponse:
     async with in_transaction() as conn:
-        appointment: Appointment | None = await Appointment.select_for_update().get_or_none(id=appointment_id, user=user)
+        appointment: Appointment | None = await Appointment.select_for_update().get_or_none(id=appointment_id,
+                                                                                            user=user)
         if not appointment:
             raise HTTPException(status_code=404, detail="Appointment not found")
 
@@ -140,6 +119,6 @@ async def cancel_appointment(
         appointment.cancelled_by = user
         if data.cancel_reason_id:  # user을 cancelled_by에 넣어주어야 한다.
             appointment.cancel_reason_id = data.cancel_reason_id
-        
+
         await appointment.save(using_db=conn)
         return appointment

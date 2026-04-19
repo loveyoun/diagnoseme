@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 
-from app.apis import appointment, auth, user
+from app.apis import appointment, auth, user, slot
 from app.core import config
 from app.db.database import initialize_tortoise
 
@@ -13,6 +13,7 @@ app: FastAPI = FastAPI(title="DiagnoseMe", version="0.1.0", redirect_slashes=Fal
 app.include_router(auth.router)
 app.include_router(user.router)
 app.include_router(appointment.router)
+app.include_router(slot.router)
 
 # Tortoise ORM이 초기화 후 FastAPI와 연결
 initialize_tortoise(app)

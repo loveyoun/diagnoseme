@@ -3,6 +3,7 @@ from enum import StrEnum
 
 from tortoise import fields
 
+from app.models import User, Hospital
 from app.models.commonmodel import CommonModel
 
 
@@ -45,3 +46,28 @@ class Slot(CommonModel):
             ("hospital", "is_active"),  # 병원 별 예약 가능 슬롯 조회
             "type",  # normal/hot 필터링용
         )
+
+
+class UserHospital(CommonModel):
+    """User(faculty) ↔ Hospital 다대다"""
+    id: int = fields.BigIntField(primary_key=True)
+
+    user: fields.ForeignKeyRelation[User] = fields.ForeignKeyField(
+        "models.User",
+        related_name="user_hospitals",
+        on_delete=fields.CASCADE,
+    )
+    hospital: fields.ForeignKeyRelation[Hospital] = fields.ForeignKeyField(
+        "models.Hospital",
+        related_name="user_hospitals",
+        on_delete=fields.CASCADE,
+    )
+
+    is_active: bool = fields.BooleanField(default=True)
+
+    user_id: int
+    hospital_id: int
+
+    class Meta:
+        table = "user_hospitals"
+        unique_together = (("user_id", "hospital_id"),)  # 중복 등록 방지

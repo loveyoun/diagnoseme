@@ -1,5 +1,6 @@
 from tortoise import fields
 
+from app.models import User
 from app.models.commonmodel import CommonModel
 
 
@@ -28,3 +29,28 @@ class Doctor(CommonModel):
 
     class Meta:
         table = "doctors"
+
+
+class UserDoctor(CommonModel):
+    """User ↔ Doctor 다대다"""
+    id: int = fields.BigIntField(primary_key=True)
+
+    user: fields.ForeignKeyRelation[User] = fields.ForeignKeyField(
+        "models.User",
+        related_name="user_doctors",
+        on_delete=fields.CASCADE,
+    )
+    doctor: fields.ForeignKeyRelation[Doctor] = fields.ForeignKeyField(
+        "models.Doctor",
+        related_name="user_doctors",
+        on_delete=fields.CASCADE,
+    )
+
+    is_active: bool = fields.BooleanField(default=True)
+
+    user_id: int
+    doctor_id: int
+
+    class Meta:
+        table = "user_doctors"
+        unique_together = (("user_id", "doctor_id"),)  # 중복 등록 방지
