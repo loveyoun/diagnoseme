@@ -1,8 +1,9 @@
 from datetime import datetime
 from enum import StrEnum
 
-from tortoise import fields, models
+from tortoise import fields
 
+from app.models import Hospital, User, Slot
 from app.models.commonmodel import CommonModel
 
 
@@ -19,9 +20,9 @@ class IdempotentStatus(StrEnum):
     FAILED = "failed"
 
 
-class CancelReason(models.Model):
+class CancelReason(CommonModel):  # 이유1, 이유2, 기타추가
     id: int = fields.SmallIntField(primary_key=True)
-    code: str = fields.CharField(max_length=50, unique=True)
+    code: str = fields.CharField(max_length=20, unique=True)
 
     class Meta:
         table = "cancel_reasons"
@@ -31,17 +32,19 @@ class Appointment(CommonModel):
     id: int = fields.BigIntField(primary_key=True)
     idempotent_key: str = fields.CharField(max_length=255, unique=True)
     idempotent_status: IdempotentStatus = fields.CharEnumField(enum_type=IdempotentStatus,
-                                                                default=IdempotentStatus.PENDING)
+                                                               default=IdempotentStatus.PENDING)
 
-    slot: int = fields.ForeignKeyField(
+    slot: fields.ForeignKeyRelation[Slot] = fields.ForeignKeyField(
         "models.AppointmentSlot",
         related_name="appointments",
         on_delete=fields.RESTRICT)
-    user: int = fields.ForeignKeyField(
+    user: fields.ForeignKeyRelation[User] = fields.ForeignKeyField(
         "models.User",
         related_name="appointments",
         on_delete=fields.RESTRICT)
-    hospital: int = fields.ForeignKeyField(
+
+    # deprecate
+    hospital: fields.ForeignKeyRelation[Hospital] = fields.ForeignKeyField(
         "models.Hospital",
         related_name="appointments",
         on_delete=fields.RESTRICT)
@@ -50,25 +53,33 @@ class Appointment(CommonModel):
     end_at: datetime = fields.DatetimeField()
     status: AppointmentStatus = fields.CharEnumField(enum_type=AppointmentStatus,
                                                      default=AppointmentStatus.CONFIRMED)
-
     memo: str | None = fields.TextField(null=True, default=None)
+
     cancelled_at: datetime | None = fields.DatetimeField(null=True, default=None)
-    cancelled_by: int | None = fields.ForeignKeyField(
+    cancelled_by: fields.ForeignKeyRelation[User] | None = fields.ForeignKeyField(
         "models.User",
         related_name="cancelled_appointments",
-        on_delete=fields.RESTRICT,
-        null=True,
-        default=None)
-    cancel_reason: int | None = fields.ForeignKeyField(
-        "models.CancelReason",
         on_delete=fields.SET_NULL,
         null=True,
         default=None)
+    cancel_reason: fields.ForeignKeyRelation[CancelReason] | None = fields.ForeignKeyField(
+        "models.CancelReason",
+        related_name="cancelled_appointments",
+        on_delete=fields.SET_NULL,
+        null=True,
+        default=None)
+
+    slot_id: int
+    user_id: int
+    hospital_id: int  # deprecate
+    cancelled_by_id: int
+    cancel_reason_id: int
 
     class Meta:
         table = "appointments"
         unique_together = (("user", "slot"),)  # 동일 유저 동일 슬롯 중복 방지
         indexes = (
+            ("hospital", "start_at", "end_at"),  # 시간 중복 찾을 때
             ("user", "status"),  # 내 예약 목록 조회
             ("hospital", "start_at"),  # 병원별 일자별 예약자 명단용
             ("slot", "status"),  # 슬롯 기준 예약 조회

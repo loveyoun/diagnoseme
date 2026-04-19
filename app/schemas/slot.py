@@ -1,7 +1,6 @@
 from datetime import datetime
-from typing import Annotated
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel
 
 from app.models.slot import SlotType
 from app.schemas.frozen_config import FROZEN_RESPONSE_CONFIG
@@ -10,7 +9,7 @@ from app.schemas.frozen_config import FROZEN_RESPONSE_CONFIG
 class AppointmentSlotResponse(BaseModel):
     id: int
     hospital_id: int
-    doctor_id: Annotated[int | None, Field(default=None)]
+    doctor_id: int | None
     type: SlotType
     capacity: int
     remains: int
@@ -20,4 +19,3 @@ class AppointmentSlotResponse(BaseModel):
     is_active: bool
 
     model_config = FROZEN_RESPONSE_CONFIG
-

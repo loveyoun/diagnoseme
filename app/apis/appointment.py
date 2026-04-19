@@ -12,8 +12,8 @@ from app.models.appointment import Appointment, AppointmentStatus
 from app.models.slot import Slot
 from app.models.user import User
 from app.schemas.appointment import (
-    AppointmentCancel,
-    AppointmentCreate,
+    AppointmentCancelRequest,
+    AppointmentRequest,
     AppointmentResponse,
 )
 from app.schemas.slot import AppointmentSlotResponse
@@ -49,7 +49,7 @@ async def list_available_slots(
 
 @router.post("/", response_model=AppointmentResponse, status_code=status.HTTP_201_CREATED)
 async def create_appointment(
-    data: AppointmentCreate,
+    data: AppointmentRequest,
     user: User = Depends(get_current_user)
 ) -> AppointmentResponse:
     # 1. Idempotency Check (DB level)
@@ -118,7 +118,7 @@ async def create_appointment(
 @router.post("/{appointment_id}/cancel", response_model=AppointmentResponse)
 async def cancel_appointment(
     appointment_id: int,
-    data: AppointmentCancel,
+    data: AppointmentCancelRequest,
     user: User = Depends(get_current_user)
 ) -> AppointmentResponse:
     async with in_transaction() as conn:
@@ -138,7 +138,7 @@ async def cancel_appointment(
         appointment.status = AppointmentStatus.CANCELLED
         appointment.cancelled_at = datetime.utcnow()
         appointment.cancelled_by = user
-        if data.cancel_reason_id:
+        if data.cancel_reason_id:  # user을 cancelled_by에 넣어주어야 한다.
             appointment.cancel_reason_id = data.cancel_reason_id
         
         await appointment.save(using_db=conn)

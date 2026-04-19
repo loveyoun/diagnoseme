@@ -9,8 +9,8 @@ from app.schemas.frozen_config import FROZEN_CONFIG, FROZEN_RESPONSE_CONFIG
 class SignUpRequest(BaseModel):
     email: Annotated[EmailStr, Field(..., max_lenth=255, description="Unique email. For login.")]
     password: Annotated[str, Field(min_length=8, max_length=20, description="Password. ge(8), le(20)")]
-    name: str
-    nickname: Annotated[str, Field(description="Unique nickname")]
+    name: Annotated[str, Field(max_length=10)]
+    nickname: Annotated[str, Field(max_length=10, description="Unique nickname")]
     phone_number: Annotated[str | None, Field(default=None, pattern=r"^\d{10,15}$")]
     gender: Annotated[Gender, Field(default=Gender.U)]
     # birthday: Annotated[datetime | None, Field(default=None)]

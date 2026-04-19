@@ -34,11 +34,14 @@ class Slot(CommonModel):
     slot_duration_minutes: int = fields.IntField(default=30)
     is_active: bool = fields.BooleanField(default=True)
 
+    hospital_id: int
+    doctor_id: int
+
     class Meta:
         table = "appointment_slots"
         indexes = (
             # ("hospital", "start_at", "end_at"),
             # ("hospital", "doctor", "start_at", "end_at"),
-            ("hospital", "is_active"),  # 예약 가능 슬롯 조회
-            ("type",),  # normal/hot 필터링용
+            ("hospital", "is_active"),  # 병원 별 예약 가능 슬롯 조회
+            "type",  # normal/hot 필터링용
         )

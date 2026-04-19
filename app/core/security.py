@@ -9,19 +9,37 @@ from redis.asyncio import Redis
 
 from app.core import config
 from app.models.user import User
+from pwdlib import PasswordHash
 
 oauth2_scheme: OAuth2PasswordBearer = OAuth2PasswordBearer(tokenUrl="/auth/signin")
 
-pwd_context: CryptContext = CryptContext(schemes=["bcrypt"], deprecated="auto")
 redis_client: Redis = Redis(host=config.REDIS_HOST, port=config.REDIS_PORT, decode_responses=True)
 
 
-def get_password_hash(password: str) -> str:
-    return pwd_context.hash(password)
+class PasswordHasher:
+    def __init__(self) -> None:
+        self._hasher = PasswordHash.recommended()
+
+        # 타이밍 공격 방지용 더미 해시
+        self._dummy_hash = self._hasher.hash("dummy-password-for-timing")
+
+    def hash(self, plain_password: str) -> str:
+        return self._hasher.hash(plain_password)
+
+    def verify(self, plain_password: str, hashed_password: str) -> bool:
+        return self._hasher.verify(plain_password, hashed_password)
+
+    def check_needs_rehash(self, hashed_password: str) -> bool:
+        return self._hasher.check_needs_rehash(hashed_password)
+
+    def verify_dummy(self, plain_password: str) -> None:
+        try:
+            self._hasher.verify(plain_password, self._dummy_hash)
+        except Exception:
+            pass
 
 
-def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return pwd_context.verify(plain_password, hashed_password)
+
 
 
 def create_access_token(data: dict[str, Any]) -> str:

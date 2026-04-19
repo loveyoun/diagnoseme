@@ -7,17 +7,18 @@ from app.schemas.frozen_config import FROZEN_RESPONSE_CONFIG, FROZEN_CONFIG
 
 
 class UserUpdateRequest(BaseModel):
-    email: Annotated[EmailStr, Field(default=None, max_lenth=255, description="Unique email. For login.")]
-    password: Annotated[str, Field(default=None, min_length=8, max_length=20, description="Password. ge(8), le(20)")]
-    name: Annotated[str, Field(default=None)]
-    nickname: Annotated[str, Field(default=None, description="Unique nickname")]
+    email: Annotated[EmailStr | None, Field(default=None, max_lenth=255, description="Unique email. For login.")]
+    password: Annotated[
+        str | None, Field(default=None, min_length=8, max_length=20, description="Password. ge(8), le(20)")]
+    name: Annotated[str | None, Field(default=None, max_length=10)]
+    nickname: Annotated[str | None, Field(default=None, max_length=10, description="Unique nickname")]
     phone_number: Annotated[str | None, Field(default=None, pattern=r"^\d{10,15}$")]
-    gender: Annotated[Gender, Field(default=Gender.U)]
+    gender: Annotated[Gender | None, Field(default=None)]
     # birthday: Annotated[datetime | None, Field(default=None)]
-    birthday: Annotated[str, Field(default=None, pattern=r"^\d{2}-\d{2}$", description="Birthday (MM-DD)")]
-    birthyear: Annotated[str, Field(default=None, pattern=r"^\d{4}$", description="Birth year (YYYY)")]
+    birthday: Annotated[str | None, Field(default=None, pattern=r"^\d{2}-\d{2}$", description="Birthday (MM-DD)")]
+    birthyear: Annotated[str | None, Field(default=None, pattern=r"^\d{4}$", description="Birth year (YYYY)")]
     profile_image: Annotated[str | None, Field(default=None, description="Profile image URL")]
-    role: Annotated[str, Field(default=None, description="User role name")]
+    role: Annotated[str | None, Field(default=None, description="User role name")]
 
     model_config = FROZEN_CONFIG
 
@@ -33,17 +34,17 @@ class UserRoleResponse(BaseModel):
 
 class UserResponse(BaseModel):
     id: int
-    email: Annotated[EmailStr, Field(max_lenth=255, description="Unique email. For login.")]
+    email: EmailStr
     name: str
-    nickname: Annotated[str, Field(description="Unique nickname")]
+    nickname: str
 
     # json: null
-    phone_number: Annotated[str | None, Field(default=None)]
-    gender: Annotated[Gender, Field(description="M/F/U")]
-    # birthday: Annotated[datetime | None, Field(default=None)]
+    phone_number: str | None
+    gender: Gender
+    # birthday: datetime
     birthday: Annotated[str, Field(description="Birthday (MM-DD)")]
     birthyear: Annotated[str, Field(description="Birth year (YYYY)")]
-    profile_image: Annotated[str | None, Field(default=None, description="Profile image URL")]
+    profile_image: str | None
 
     role: Annotated[UserRoleResponse, Field(description="User role id, name")]
     is_active: bool

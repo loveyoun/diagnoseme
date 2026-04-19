@@ -18,7 +18,7 @@ router = APIRouter(prefix="/auth", tags=["Auth"])
 
 @router.post("/signup", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 async def signup(user_data: SignUpRequest) -> UserResponse:
-    return await AuthService.create(user_data)
+    return await AuthService.service_auth_sign_up(user_data)
 
 @router.post("/signin", response_model=TokenResponse)
 async def signin(user_data: SignInRequest) -> TokenResponse:

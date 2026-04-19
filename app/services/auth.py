@@ -1,33 +1,29 @@
-"""UserService — 순수 비즈니스 로직 담당.
-
-서비스 레이어 규칙:
-- commit() 호출 금지 → 트랜잭션은 라우터의 몫
-- flush()로 DB에 전송만 → ID/서버 기본값을 받아오기 위함
-- refresh()로 DB 상태 동기화 → server_default 값 반영
-"""
 from datetime import datetime, timezone
 
 from fastapi import HTTPException
+from passlib.context import CryptContext
 from tortoise.exceptions import IntegrityError
 from tortoise.transactions import atomic
 
-from app.core import config
+from app.core import config, password_hasher
 from app.core.redis import redis_client  # access token blacklist
 from app.core.security import create_access_token, get_password_hash, verify_password
 from app.models.user import User, UserRole
 from app.schemas.auth import TokenResponse, SignInRequest, SignUpRequest
 
+pwd_context: CryptContext = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
 
 class AuthService:
     @staticmethod
-    @atomic()  # in_transaction()
-    async def create(user_data: SignUpRequest) -> User:
+    @atomic  # in_transaction()
+    async def service_auth_sign_up(user_data: SignUpRequest) -> User:
         if await User.exists(email=user_data.email):
-            raise HTTPException(status_code=400, detail="Email already registered")
+            raise HTTPException(status_code=400, detail=f"Email {user_data.email} already registered")
         if await User.exists(nickname=user_data.nickname):
-            raise HTTPException(status_code=400, detail="Nickname already taken")
+            raise HTTPException(status_code=400, detail=f"Nickname {user_data.nickname} already taken")
 
-        # ORM instance (UserRole)
+        # ORM instance UserRole
         role, _ = await UserRole.get_or_create(code=user_data.role)
 
         try:
@@ -45,7 +41,9 @@ class AuthService:
             return user
         except IntegrityError:  # Unique Constraint
             # exists() 통과 후 race condition 방어
-            raise HTTPException(status_code=400, detail="Already registered")
+            raise HTTPException(
+                status_code=400,
+                detail=f"Email{user_data.email} or Nickname{user_data.nickname} already exists or User role{user_data.role} deleted")
 
     @staticmethod
     async def signin(user_data: SignInRequest) -> TokenResponse:
@@ -73,3 +71,40 @@ class AuthService:
             "1",
             ex=config.ACCESS_TOKEN_EXPIRE_MINUTES * 60
         )
+
+    @staticmethod
+    def get_password_hash(password: str) -> str:
+        return password_hasher.hash(password)
+        # return pwd_context.hash(password)
+
+    @staticmethod
+    def verify_password(plain_password: str, hashed_password: str) -> bool:
+        return password_hasher.verify(plain_password, hashed_password)
+        # return pwd_context.verify(plain_password, hashed_password)
+
+    async def authenticate(self, email: str, password: str) -> User | None:
+        # user = await self.get_by_email(email)
+        user = User()
+        if not user:
+            password_hasher.verify_dummy(password)
+            return None
+        if not self.verify_password(password, user.hashed_password):
+            return None
+        return user
+
+    async def authenticate_with_rehash(
+            self,
+            email: str,
+            password: str,
+    ) -> User | None:
+        user = await self.get_by_email(email)
+
+        if not user:
+            password_hasher.verify_dummy(password)
+            return None
+        if not self.verify_password(password, user):
+            return None
+        # 보안 정책 업그레이드 체크
+        if password_hasher.check_needs_rehash(user.hashed_password):
+            user.hashed_password = password_hasher.hash(password)
+        return user

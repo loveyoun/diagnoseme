@@ -26,20 +26,22 @@ class User(CommonModel):
     id: int = fields.BigIntField(primary_key=True)
 
     email: str = fields.CharField(max_length=255, unique=True)
-    hashed_password: str = fields.CharField(max_length=128)
+    hashed_password: str  # Argon2id
 
     name: str = fields.CharField(max_length=10)
     nickname: str = fields.CharField(max_length=10, unique=True)
 
     # nullable. "" != NULL
-    phone_number: str | None = fields.CharField(max_length=20, null=True, default=None)
+    phone_number: str | None = fields.CharField(max_length=15, null=True, default=None)
     gender: Gender = fields.CharEnumField(enum_type=Gender, default=Gender.U)  # default
     # birthday: datetime | None = fields.DatetimeField(null=True, default=None)  # nullable
     birthday: str = fields.CharField(max_length=5)  # MM-DD
     birthyear: str = fields.CharField(max_length=4)  # YYYY
     profile_image: str | None = fields.CharField(max_length=255, null=True, default=None)  # nullable
 
-    role: fields.ForeignKeyRelation[UserRole] = fields.ForeignKeyField("models.UserRole", on_delete=fields.RESTRICT)
+    role: fields.ForeignKeyRelation[UserRole] = fields.ForeignKeyField(
+        "models.UserRole",
+        on_delete=fields.RESTRICT)
     is_active: bool = fields.BooleanField(default=True)  # default
     last_login_at: datetime | None = fields.DatetimeField(null=True, default=None)  # nullable
 
