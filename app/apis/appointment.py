@@ -1,13 +1,11 @@
 import asyncio
-from datetime import date, datetime
-from typing import Any
+from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, HTTPException, status
 from redis.asyncio import Redis
 from tortoise.transactions import in_transaction
 
 from app.core import config
-from app.core.security import get_current_user
 from app.models.appointment import Appointment, AppointmentStatus
 from app.models.slot import Slot
 from app.models.user import User
@@ -16,7 +14,6 @@ from app.schemas.appointment import (
     AppointmentRequest,
     AppointmentResponse,
 )
-from app.schemas.slot import SlotResponse
 
 router = APIRouter(prefix="/appointments", tags=["Appointments"])
 
@@ -27,8 +24,11 @@ redis_client: Redis = Redis(host=config.REDIS_HOST, port=config.REDIS_PORT, deco
 @router.post("", response_model=AppointmentResponse, status_code=status.HTTP_201_CREATED)
 async def create_appointment(
         data: AppointmentRequest,
-        user: User = Depends(get_current_user)
+        user_id: int,
+        # user: User = Depends(get_current_user),
 ) -> AppointmentResponse:
+    user = await User.get_or_none(id=user_id)
+
     # 1. Idempotency Check (DB level)
     existing: Appointment | None = await Appointment.get_or_none(idempotency_key=data.idempotency_key)
     if existing:
@@ -97,9 +97,12 @@ async def create_appointment(
 async def cancel_appointment(
         appointment_id: int,
         data: AppointmentCancelRequest,
-        user: User = Depends(get_current_user)
+        user_id: int,
+        # user: User = Depends(get_current_user),
 ) -> AppointmentResponse:
     async with in_transaction() as conn:
+        user = await User.get_or_none(id=user_id)
+
         appointment: Appointment | None = await Appointment.select_for_update().get_or_none(id=appointment_id,
                                                                                             user=user)
         if not appointment:

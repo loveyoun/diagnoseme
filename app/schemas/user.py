@@ -7,9 +7,7 @@ from app.schemas.frozen_config import FROZEN_RESPONSE_CONFIG, FROZEN_CONFIG
 
 
 class UserUpdateRequest(BaseModel):
-    email: Annotated[EmailStr | None, Field(default=None, max_lenth=255, description="Unique email. For login.")]
-    password: Annotated[
-        str | None, Field(default=None, min_length=8, max_length=20, description="Password. ge(8), le(20)")]
+    email: Annotated[EmailStr | None, Field(default=None, max_lenth=255, description="Unique email for login")]
     name: Annotated[str | None, Field(default=None, max_length=10)]
     nickname: Annotated[str | None, Field(default=None, max_length=10, description="Unique nickname")]
     phone_number: Annotated[str | None, Field(default=None, pattern=r"^\d{10,15}$")]
@@ -18,7 +16,25 @@ class UserUpdateRequest(BaseModel):
     birthday: Annotated[str | None, Field(default=None, pattern=r"^\d{2}-\d{2}$", description="Birthday (MM-DD)")]
     birthyear: Annotated[str | None, Field(default=None, pattern=r"^\d{4}$", description="Birth year (YYYY)")]
     profile_image: Annotated[str | None, Field(default=None, description="Profile image URL")]
-    role: Annotated[str | None, Field(default=None, description="User role name")]
+    role_id: Annotated[int | None, Field(default=None)]
+
+    model_config = FROZEN_CONFIG
+
+
+class UserPasswordUpdateRequest(BaseModel):
+    password: Annotated[str, Field(min_length=8, max_length=20, description="Password. ge(8), le(20)")]
+
+
+class DoctorProfileRegisterRequest(BaseModel):
+    hospital_id: Annotated[int | None, Field(default=None)]
+    license_number: int
+    specialty: Annotated[str | None, Field(default=None, max_length=20)]
+
+    model_config = FROZEN_CONFIG
+
+
+class UserHospitalRegisterRequest(BaseModel):
+    hospital_id: int
 
     model_config = FROZEN_CONFIG
 
@@ -35,18 +51,17 @@ class UserRoleResponse(BaseModel):
 class UserResponse(BaseModel):
     id: int
     email: EmailStr
+
     name: str
     nickname: str
-
-    # json: null
-    phone_number: str | None
+    phone_number: str | None  # json: null
     gender: Gender
     # birthday: datetime
     birthday: Annotated[str, Field(description="Birthday (MM-DD)")]
     birthyear: Annotated[str, Field(description="Birth year (YYYY)")]
     profile_image: str | None
 
-    role: Annotated[UserRoleResponse, Field(description="User role id, name")]
+    role: UserRoleResponse
     is_active: bool
 
     model_config = FROZEN_RESPONSE_CONFIG

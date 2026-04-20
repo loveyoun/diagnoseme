@@ -17,14 +17,15 @@ class Slot(CommonModel):
 
     hospital: int = fields.ForeignKeyField(
         "models.Hospital",
-        related_name="appointment_slots",
+        related_name="slots",
         on_delete=fields.RESTRICT)
     doctor: int | None = fields.ForeignKeyField(
         "models.Doctor",
+        related_name="slots",
+        on_delete=fields.SET_NULL,
         null=True,
         default=None,
-        related_name="appointment_slots",
-        on_delete=fields.SET_NULL)
+    )
     type: SlotType = fields.CharEnumField(enum_type=SlotType, default=SlotType.NORMAL)
 
     capacity: int = fields.IntField(default=1)
@@ -39,35 +40,10 @@ class Slot(CommonModel):
     doctor_id: int
 
     class Meta:
-        table = "appointment_slots"
+        table = "slots"
         indexes = (
             # ("hospital", "start_at", "end_at"),
             # ("hospital", "doctor", "start_at", "end_at"),
             ("hospital", "is_active"),  # 병원 별 예약 가능 슬롯 조회
             "type",  # normal/hot 필터링용
         )
-
-
-class UserHospital(CommonModel):
-    """User(faculty) ↔ Hospital 다대다"""
-    id: int = fields.BigIntField(primary_key=True)
-
-    user: fields.ForeignKeyRelation[User] = fields.ForeignKeyField(
-        "models.User",
-        related_name="user_hospitals",
-        on_delete=fields.CASCADE,
-    )
-    hospital: fields.ForeignKeyRelation[Hospital] = fields.ForeignKeyField(
-        "models.Hospital",
-        related_name="user_hospitals",
-        on_delete=fields.CASCADE,
-    )
-
-    is_active: bool = fields.BooleanField(default=True)
-
-    user_id: int
-    hospital_id: int
-
-    class Meta:
-        table = "user_hospitals"
-        unique_together = (("user_id", "hospital_id"),)  # 중복 등록 방지

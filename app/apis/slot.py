@@ -42,6 +42,7 @@ redis_client: Redis = Redis(host=config.REDIS_HOST, port=config.REDIS_PORT, deco
 #     return SlotResponse()
 
 
+# Pagination
 @router.get("")
 async def list_available_slots(
         hospital_id: int | None = None,
@@ -49,9 +50,6 @@ async def list_available_slots(
         start_date: date | None = None,
         end_date: date | None = None,
 ) -> list[SlotResponse]:
-    """
-    List available appointment slots with filtering.
-    """
     query = Slot.filter(is_active=True, remains__gt=0)
 
     if hospital_id:

@@ -31,9 +31,23 @@ class SlotUpdateRequest(BaseModel):
 
     model_config = FROZEN_CONFIG
 
-# Idempotent API
+
 class SlotActiveTypeUpdateRequest(BaseModel):
     slot_id: int
+
+    model_config = FROZEN_CONFIG
+
+# Fix
+class SlotPaginationRequest(BaseModel):
+    hospital_id: Annotated[int | None, Field(default=None)]
+    doctor_id: Annotated[int | None, Field(default=None)]
+    type: Annotated[SlotType | None, Field(default=None)]
+    capacity: Annotated[int | None, Field(default=None)]
+    remains: Annotated[int | None, Field(default=None)]
+    start_at: Annotated[datetime | None, Field(default=None)]
+    end_at: Annotated[datetime | None, Field(default=None)]
+    slot_duration_minutes: Annotated[int | None, Field(default=None)]
+    is_active: Annotated[bool | None, Field(default=True)]
 
     model_config = FROZEN_CONFIG
 

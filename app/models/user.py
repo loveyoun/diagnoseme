@@ -16,6 +16,8 @@ class Gender(StrEnum):
 
 class UserRole(CommonModel):
     id: int = fields.SmallIntField(primary_key=True)
+
+    # user, faculty, doctor, admin
     code: str = fields.CharField(max_length=20, unique=True)
 
     class Meta:
@@ -24,9 +26,8 @@ class UserRole(CommonModel):
 
 class User(CommonModel):
     id: int = fields.BigIntField(primary_key=True)
-
     email: str = fields.CharField(max_length=255, unique=True)
-    hashed_password: str  # Argon2id
+    hashed_password: str = fields.CharField(max_length=255)  # Argon2id
 
     name: str = fields.CharField(max_length=10)
     nickname: str = fields.CharField(max_length=10, unique=True)
@@ -34,7 +35,7 @@ class User(CommonModel):
     # nullable. "" != NULL
     phone_number: str | None = fields.CharField(max_length=15, null=True, default=None)
     gender: Gender = fields.CharEnumField(enum_type=Gender, default=Gender.U)  # default
-    # birthday: datetime | None = fields.DatetimeField(null=True, default=None)  # nullable
+    # birthday: datetime = fields.DatetimeField()
     birthday: str = fields.CharField(max_length=5)  # MM-DD
     birthyear: str = fields.CharField(max_length=4)  # YYYY
     profile_image: str | None = fields.CharField(max_length=255, null=True, default=None)  # nullable

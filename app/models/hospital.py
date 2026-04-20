@@ -15,42 +15,55 @@ class Hospital(CommonModel):
         table = "hospitals"
 
 
-class Doctor(CommonModel):
+class DoctorProfile(CommonModel):
     id: int = fields.BigIntField(primary_key=True)
-    hospital: fields.ForeignKeyRelation[Hospital] = fields.ForeignKeyField(
+
+    # User 1명당 Doctor 프로필은 딱 1개만 존재해야 함
+    # Unique Constraint
+    user: fields.OneToOneRelation[User] | None = fields.OneToOneField(
+        "models.User",
+        related_name="doctor_profile",
+        on_delete=fields.SET_NULL,
+        null=True,
+        default=None
+    )
+    hospital: fields.ForeignKeyRelation[Hospital] | None = fields.ForeignKeyField(
         "models.Hospital",
         related_name="doctors",
-        on_delete=fields.RESTRICT)
-    name: str = fields.CharField(max_length=10)
-    specialty: str | None = fields.CharField(max_length=30, null=True, default=True)
-    is_active: bool = fields.BooleanField(default=True)
+        on_delete=fields.SET_NULL,
+        null=True,
+        default=None
+    )
 
+    license_number: str = fields.CharField(max_length=15)
+    specialty: str | None = fields.CharField(max_length=20, null=True, default=True)
+    approved: bool = fields.BooleanField(default=True)
+
+    user_id: int
     hospital_id: int
 
     class Meta:
         table = "doctors"
 
 
-class UserDoctor(CommonModel):
-    """User ↔ Doctor 다대다"""
+class UserHospital(CommonModel):
     id: int = fields.BigIntField(primary_key=True)
 
-    user: fields.ForeignKeyRelation[User] = fields.ForeignKeyField(
+    user: fields.OneToOneRelation[User] = fields.OneToOneField(
         "models.User",
-        related_name="user_doctors",
+        related_name="user_hospital",
         on_delete=fields.CASCADE,
     )
-    doctor: fields.ForeignKeyRelation[Doctor] = fields.ForeignKeyField(
-        "models.Doctor",
-        related_name="user_doctors",
+    hospital: fields.ForeignKeyRelation[Hospital] = fields.ForeignKeyField(
+        "models.Hospital",
+        related_name="user_hospitals",
         on_delete=fields.CASCADE,
     )
 
-    is_active: bool = fields.BooleanField(default=True)
+    approved: bool = fields.BooleanField(default=True)
 
     user_id: int
-    doctor_id: int
+    hospital_id: int
 
     class Meta:
-        table = "user_doctors"
-        unique_together = (("user_id", "doctor_id"),)  # 중복 등록 방지
+        table = "user_hospitals"

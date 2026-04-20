@@ -17,7 +17,7 @@ class SignUpRequest(BaseModel):
     birthday: Annotated[str, Field(pattern=r"^\d{2}-\d{2}$", description="Birthday (MM-DD)")]
     birthyear: Annotated[str, Field(pattern=r"^\d{4}$", description="Birth year (YYYY)")]
     profile_image: Annotated[str | None, Field(default=None, description="Profile image URL")]
-    role: Annotated[str, Field(description="User role name")]
+    role_id: Annotated[int, Field(description="User role id")]
 
     model_config = FROZEN_CONFIG
 

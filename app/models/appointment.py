@@ -34,21 +34,19 @@ class Appointment(CommonModel):
     idempotent_status: IdempotentStatus = fields.CharEnumField(enum_type=IdempotentStatus,
                                                                default=IdempotentStatus.PENDING)
 
-    slot: fields.ForeignKeyRelation[Slot] = fields.ForeignKeyField(
-        "models.AppointmentSlot",
-        related_name="appointments",
-        on_delete=fields.RESTRICT)
     user: fields.ForeignKeyRelation[User] = fields.ForeignKeyField(
         "models.User",
         related_name="appointments",
         on_delete=fields.RESTRICT)
+    slot: fields.ForeignKeyRelation[Slot] = fields.ForeignKeyField(
+        "models.AppointmentSlot",
+        related_name="appointments",
+        on_delete=fields.RESTRICT)
 
-    # deprecate
     hospital: fields.ForeignKeyRelation[Hospital] = fields.ForeignKeyField(
         "models.Hospital",
         related_name="appointments",
         on_delete=fields.RESTRICT)
-
     start_at: datetime = fields.DatetimeField()
     end_at: datetime = fields.DatetimeField()
     status: AppointmentStatus = fields.CharEnumField(enum_type=AppointmentStatus,
@@ -69,9 +67,9 @@ class Appointment(CommonModel):
         null=True,
         default=None)
 
-    slot_id: int
     user_id: int
-    hospital_id: int  # deprecate
+    slot_id: int
+    hospital_id: int
     cancelled_by_id: int
     cancel_reason_id: int
 
@@ -79,7 +77,7 @@ class Appointment(CommonModel):
         table = "appointments"
         unique_together = (("user", "slot"),)  # 동일 유저 동일 슬롯 중복 방지
         indexes = (
-            ("hospital", "start_at", "end_at"),  # 시간 중복 찾을 때
+            # ("start_at", "end_at"),  # GiST
             ("user", "status"),  # 내 예약 목록 조회
             ("hospital", "start_at"),  # 병원별 일자별 예약자 명단용
             ("slot", "status"),  # 슬롯 기준 예약 조회

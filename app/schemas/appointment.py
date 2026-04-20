@@ -4,20 +4,27 @@ from typing import Annotated
 from pydantic import BaseModel, Field
 
 from app.models.appointment import AppointmentStatus, IdempotentStatus
-from app.schemas.frozen_config import FROZEN_RESPONSE_CONFIG
+from app.schemas.frozen_config import FROZEN_RESPONSE_CONFIG, FROZEN_CONFIG
 
 
 class PollingRequest(BaseModel):
     slot_id: int
     idempotency_key: Annotated[str, Field(max_length=255, description="Idempotency key")]
 
+    model_config = FROZEN_CONFIG
+
 
 class AppointmentRequest(PollingRequest):
     memo: Annotated[str | None, Field(default=None, description="Memo")]
 
+    model_config = FROZEN_CONFIG
+
 
 class AppointmentCancelRequest(BaseModel):
     cancel_reason_id: Annotated[int | None, Field(default=None, description="Cancel reason ID")]
+    cancel_reason_code: Annotated[str, Field(max_length=20, description="Cancel reason code")]
+
+    model_config = FROZEN_CONFIG
 
 
 class AppointmentResponse(BaseModel):

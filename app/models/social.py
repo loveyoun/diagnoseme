@@ -10,7 +10,7 @@ if TYPE_CHECKING:
 
 class AuthProvider(CommonModel):
     id: int = fields.SmallIntField(primary_key=True)
-    code: str = fields.CharField(max_length=10, unique=True)
+    code: str = fields.CharField(max_length=10, unique=True)  # 제공사 이름
 
     class Meta:
         table = "auth_providers"

@@ -1,6 +1,5 @@
 from fastapi import APIRouter, status
 
-from app.models.user import User
 from app.schemas.user import UserResponse, UserUpdateRequest
 from app.services.user import UserService
 
@@ -21,3 +20,12 @@ async def update_user(user_id: int, user_data: UserUpdateRequest) -> UserRespons
 async def delete_user(user_id: int) -> None:
     await UserService.delete_user(user_id)
     return None
+
+# @router.patch("/active/{user_id}", response_model=UserResponse)
+# async def update_user(user_id: int) -> UserResponse:
+#     return await UserService.get_user_by_id(user_id)
+#
+#
+# @router.patch("/inactive/{user_id}", response_model=UserResponse)
+# async def update_user(user_id: int) -> UserResponse:
+#     return await UserService.get_user_by_id(user_id)
