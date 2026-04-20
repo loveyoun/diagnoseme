@@ -1,9 +1,10 @@
+from __future__ import annotations
+
 from datetime import datetime
 from enum import StrEnum
 
 from tortoise import fields
 
-from app.models import User, Hospital
 from app.models.commonmodel import CommonModel
 
 

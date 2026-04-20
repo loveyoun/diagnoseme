@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from datetime import datetime
 from enum import StrEnum
 
@@ -14,8 +16,8 @@ class AppointmentStatus(StrEnum):
     COMPLETED = "completed"
 
 
-class IdempotentStatus(StrEnum):
-    PENDING = "pending"
+class IdempotencyStatus(StrEnum):
+    PROCESSING = "processing"
     SUCCESS = "success"
     FAILED = "failed"
 
@@ -30,16 +32,16 @@ class CancelReason(CommonModel):  # 이유1, 이유2, 기타추가
 
 class Appointment(CommonModel):
     id: int = fields.BigIntField(primary_key=True)
-    idempotent_key: str = fields.CharField(max_length=255, unique=True)
-    idempotent_status: IdempotentStatus = fields.CharEnumField(enum_type=IdempotentStatus,
-                                                               default=IdempotentStatus.PENDING)
+    idem_key: str = fields.CharField(max_length=255, unique=True)
+    idem_status: IdempotencyStatus = fields.CharEnumField(enum_type=IdempotencyStatus,
+                                                          default=IdempotencyStatus.PROCESSING)
 
     user: fields.ForeignKeyRelation[User] = fields.ForeignKeyField(
         "models.User",
         related_name="appointments",
         on_delete=fields.RESTRICT)
     slot: fields.ForeignKeyRelation[Slot] = fields.ForeignKeyField(
-        "models.AppointmentSlot",
+        "models.Slot",
         related_name="appointments",
         on_delete=fields.RESTRICT)
 
@@ -82,3 +84,7 @@ class Appointment(CommonModel):
             ("hospital", "start_at"),  # 병원별 일자별 예약자 명단용
             ("slot", "status"),  # 슬롯 기준 예약 조회
         )
+
+    @classmethod
+    async def get_by_idem_key(cls, idem_key: str) -> Appointment | None:
+        return await cls.get_or_none(idem_key=idem_key)

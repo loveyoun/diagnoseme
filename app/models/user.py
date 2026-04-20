@@ -17,7 +17,7 @@ class Gender(StrEnum):
 class UserRole(CommonModel):
     id: int = fields.SmallIntField(primary_key=True)
 
-    # user, faculty, doctor, admin
+    # user(가입할 때), faculty/doctor(신청), admin
     code: str = fields.CharField(max_length=20, unique=True)
 
     class Meta:
@@ -50,3 +50,7 @@ class User(CommonModel):
 
     class Meta:
         table = "users"
+
+    @classmethod
+    async def get_by_id(cls, user_id: int) -> User | None:
+        return await cls.get_or_none(id=user_id)  # .select_related("role")
