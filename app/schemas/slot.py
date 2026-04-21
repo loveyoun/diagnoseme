@@ -10,7 +10,7 @@ from app.schemas.frozen_config import FROZEN_RESPONSE_CONFIG, FROZEN_CONFIG
 class SlotRequest(BaseModel):
     hospital_id: int
     doctor_id: Annotated[int | None, Field(default=None)]
-    type: Annotated[SlotType, Field(default="hot")]
+    type: Annotated[SlotType, Field(default=SlotType.NORMAL)]
     capacity: int
     remains: int
     start_at: datetime
@@ -32,10 +32,11 @@ class SlotUpdateRequest(BaseModel):
     model_config = FROZEN_CONFIG
 
 
-class SlotActiveTypeUpdateRequest(BaseModel):
+class SlotTypeActiveUpdateRequest(BaseModel):
     slot_id: int
 
     model_config = FROZEN_CONFIG
+
 
 # Fix
 class SlotPaginationRequest(BaseModel):
