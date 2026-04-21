@@ -77,10 +77,10 @@ class AdmissionControl:
 
     # ── Idempotency ──────────────────────────────────────────
 
-    def _idem_key(self, user_id: int, idempotency_key: str) -> str:
-        # user_id + 클라이언트 제공 키 로 네임스페이스 분리
+    def _idem_key(self, user_id: int, idem_key: str) -> str:
+        # user_id + 클라이언트 제공키 로 네임스페이스 분리
         # 다른 유저가 같은 idem key를 우연히 쓰는 경우 방지
-        return f"idem:{user_id}:{idempotency_key}"
+        return f"idem:{user_id}:{idem_key}"
 
     async def check_idempotency(
             self, user_id: int, idempotency_key: str
@@ -107,10 +107,10 @@ class AdmissionControl:
             raise HTTPException(409, detail={"error": "duplicate_in_flight"})
 
     async def mark_complete(
-            self, user_id: int, idempotency_key: str, result: dict, success: bool = True
+            self, user_id: int, idem_key: str, result: dict, success: bool = True
     ):
         """Worker가 완료 후 호출 → TTL을 24h로 늘리고 결과 저장"""
-        key = self._idem_key(user_id, idempotency_key)
+        key = self._idem_key(user_id, idem_key)
         payload = json.dumps({
             "status": "success" if success else "failed",
             "result": result,
@@ -141,6 +141,6 @@ class AdmissionControl:
     async def release_slot(self, slot_id: int, user_id: int):
         """
         보상 트랜잭션
-        Worker 실패 후 복구 시 예약자 제거
+        Worker 최종실패 후 예약자 제거
         """
         await self.redis.srem(f"slot:{slot_id}:members", user_id)

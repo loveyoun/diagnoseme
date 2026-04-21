@@ -34,7 +34,7 @@ class Appointment(CommonModel):
     id: int = fields.BigIntField(primary_key=True)
     idem_key: str = fields.CharField(max_length=255, unique=True)
     idem_status: IdempotencyStatus = fields.CharEnumField(enum_type=IdempotencyStatus,
-                                                          default=IdempotencyStatus.PROCESSING)
+                                                          default=IdempotencyStatus.SUCCESS)
 
     user: fields.ForeignKeyRelation[User] = fields.ForeignKeyField(
         "models.User",
@@ -88,3 +88,29 @@ class Appointment(CommonModel):
     @classmethod
     async def get_by_idem_key(cls, idem_key: str) -> Appointment | None:
         return await cls.get_or_none(idem_key=idem_key)
+
+    @classmethod
+    async def create_appointment(
+            cls, idem_key: str, user_id: int, slot_id: int, memo: str | None
+    ) -> Appointment:
+        slot = await Slot.get_or_none(id=slot_id)
+
+        # 검증 실패 시 명시적 에러 발생
+        if not slot:
+            raise ValueError(f"Slot {slot_id} not found")
+        if not slot.is_active:
+            raise RuntimeError(f"Slot {slot_id} is not active")
+
+        # IntegrityError(unique_together)
+        # ON CONFLICT DO NOTHING
+        return await Appointment.create(
+            idem_key=idem_key,
+            idem_status=IdempotencyStatus.SUCCESS,
+            user_id=user_id,
+            slot_id=slot_id,
+            hospital_id=slot.hospital_id,
+            start_at=slot.start_at,
+            end_at=slot.end_at,
+            status=AppointmentStatus.CONFIRMED,
+            memo=memo,
+        )

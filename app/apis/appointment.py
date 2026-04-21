@@ -6,7 +6,7 @@ from fastapi import APIRouter, HTTPException, status
 from redis.asyncio import Redis
 from tortoise.transactions import in_transaction
 
-from app.core import config
+from app.core import get_redis
 from app.core.admission_control import AdmissionControl, SlotResult
 from app.core.rate_limiter import TokenBucketRateLimiter
 from app.core.stream_producer import stream_enqueue_appointment
@@ -22,7 +22,8 @@ from app.schemas.appointment import (
 router = APIRouter(prefix="/appointments", tags=["Appointments"])
 
 # Redis connection pool
-redis_client: Redis = Redis(host=config.REDIS_HOST, port=config.REDIS_PORT, decode_responses=True)
+# redis_client: Redis = Redis(host=config.REDIS_HOST, port=config.REDIS_PORT, decode_responses=True)
+redis_client: Redis = get_redis()
 
 
 @router.post("/v1", response_model=AppointmentResponse, status_code=status.HTTP_201_CREATED)
@@ -34,7 +35,7 @@ async def create_appointment(
     user = await User.get_by_id(user_id=user_id)
 
     # 1. Idempotency Check (DB level)
-    existing: Appointment | None = await Appointment.get_by_idem_key(idem_key=appt_req.idemp_key)
+    existing: Appointment | None = await Appointment.get_by_idem_key(idem_key=appt_req.idem_key)
     if existing:
         return existing
 
@@ -44,7 +45,7 @@ async def create_appointment(
 
     # 3. Distributed Lock (Redis) to prevent race conditions on high traffic
     lock_key: str = f"lock:slot:{appt_req.slot_id}"
-    lock_value: str = f"{user.id}:{appt_req.idempotency_key}"
+    lock_value: str = f"{user.id}:{appt_req.idem_key}"
 
     # Try to acquire lock for 10 seconds
     acquired: bool = await redis_client.set(lock_key, lock_value, ex=10, nx=True)
@@ -73,7 +74,7 @@ async def create_appointment(
 
             # 5. Create Appointment
             appointment: Appointment = await Appointment.create(
-                idemp_key=appt_req.idemp_key,
+                idem_key=appt_req.idem_key,
                 user=user,
                 slot=slot,
                 hospital_id=slot.hospital_id,
@@ -105,14 +106,13 @@ async def create_appointment(
 # ─────────────────────────────────────────────
 @router.post("/v2", response_model=AppointmentResponse, status_code=status.HTTP_201_CREATED)
 async def create_appointment(
-        appointment_req: AppointmentRequest,
+        appt_req: AppointmentRequest,
         user_id: int,
         # user: User = Depends(get_current_user),
         request: Request,
 ) -> dict[str, str]:
-    slot_id: int = appointment_req.slot_id
-    memo: str = appointment_req.memo
-    idem_key: str = appointment_req.idem_key
+    slot_id: int = appt_req.slot_id
+    idem_key: str = appt_req.idem_key
     user = await User.get_by_id(user_id=user_id)
 
     redis: Redis = redis_client
@@ -148,7 +148,9 @@ async def create_appointment(
 
     # ── Step 4: 처리 중 마킹 + Stream 발행 ────────
     await admission.mark_processing(user_id, idem_key)
-    msg_id = await stream_enqueue_appointment(redis, user_id, slot_id, idem_key)
+    msg_id = await stream_enqueue_appointment(
+        redis, user_id, slot_id, idem_key, extra={"memo": appt_req.memo}
+    )
 
     return {
         "status": "processing",
