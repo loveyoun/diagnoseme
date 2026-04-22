@@ -32,7 +32,7 @@ class Slot(CommonModel):
     type: SlotType = fields.CharEnumField(enum_type=SlotType, default=SlotType.NORMAL)
 
     capacity: int = fields.IntField(default=1)
-    remains: int = fields.IntField(default=1)
+    remains: int = fields.IntField(default=1)  # frequent update column
     start_at: datetime = fields.DatetimeField()
     end_at: datetime = fields.DatetimeField()
     slot_duration_minutes: int = fields.IntField(default=30)

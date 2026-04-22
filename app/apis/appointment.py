@@ -162,6 +162,16 @@ async def create_appointment(
     }
 
 
+@router.get("/appointments/{idem_key}")
+async def polling(idem_key: str):
+    pass
+
+
+@router.get("/appointments/{idem_key}/stream")
+async def sse(idem_key: str):
+    pass
+
+
 @router.post("/{appointment_id}/cancel", response_model=AppointmentResponse)
 async def cancel_appointment(
         appointment_id: int,

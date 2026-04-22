@@ -1,9 +1,5 @@
 from typing import Any
 
-from fastapi import FastAPI
-from tortoise import Tortoise
-from tortoise.contrib.fastapi import register_tortoise
-
 from app.core import config
 
 # Tortoise가 스캔할 모델 모듈 목록
@@ -38,18 +34,17 @@ TORTOISE_ORM: dict[str, Any] = {
     "timezone": config.TZ,
 }
 
-
-def initialize_tortoise(app: FastAPI) -> None:
-    # import 타이밍 이슈: 모델 메타데이터를 선등록
-    Tortoise.init_models(TORTOISE_APP_MODELS, "models")
-    # app lifespan과 DB lifecycle 연결
-    register_tortoise(app, config=TORTOISE_ORM, generate_schemas=False)
-
-    # --- 아래 코드 추가 ---
-    @app.on_event("startup")
-    async def verify_db():
-        print("🔍 DB 연결 확인 시도 중...")
-        conn = Tortoise.get_connection("default")
-        result = await conn.execute_query_dict("SELECT 1")
-        print(f"✅ DB 연결 성공! 결과: {result}")
-    # -----------------------
+# def initialize_tortoise(app: FastAPI) -> None:
+#     # import 타이밍 이슈: 모델 메타데이터를 선등록
+#     Tortoise.init_models(TORTOISE_APP_MODELS, "models")
+#     # app lifespan과 DB lifecycle 연결
+#     register_tortoise(app, config=TORTOISE_ORM, generate_schemas=False)
+#
+#     # -----------------------
+#     @app.on_event("startup")
+#     async def verify_db():
+#         print("🔍 DB 연결 확인 시도 중...")
+#         conn = Tortoise.get_connection("default")
+#         result = await conn.execute_query_dict("SELECT 1")
+#         print(f"✅ DB 연결 성공! 결과: {result}")
+#     # -----------------------

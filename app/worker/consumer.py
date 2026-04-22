@@ -40,6 +40,7 @@ class AppointmentWorker:
         idem_key = data["idem_key"]
 
         try:
+            ''' Integrity Handling '''
             # 1. DB 저장
             # Redis session, DB session 연결
             appt = await Appointment.create_appointment(idem_key=idem_key,
@@ -146,7 +147,7 @@ class AppointmentWorker:
                     await self.admission.release_slot(data["slot_id"], data["user_id"])
                     await self.admission.mark_complete(
                         data["user_id"],
-                        data["idempotency_key"],
+                        data["idem_key"],
                         {"error": "processing_failed"},
                         success=False,
                     )
