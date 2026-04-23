@@ -5,8 +5,9 @@ from enum import StrEnum
 
 from tortoise import fields
 
-from app.models import Hospital, DoctorProfile
+from app.models import Hospital
 from app.models.commonmodel import CommonModel
+from app.models.relations import DoctorProfile
 from app.schemas.slot import SlotRequest
 
 

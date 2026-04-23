@@ -9,9 +9,9 @@ from app.models.commonmodel import CommonModel
 
 
 class Gender(StrEnum):
-    M = "M"
-    F = "F"
-    U = "U"  # unknown
+    M = "male"
+    F = "female"
+    U = "unknown"
 
 
 class UserRole(CommonModel):
@@ -42,8 +42,10 @@ class User(CommonModel):
 
     role: fields.ForeignKeyRelation[UserRole] = fields.ForeignKeyField(
         "models.UserRole",
-        on_delete=fields.RESTRICT)
-    is_active: bool = fields.BooleanField(default=True)  # default
+        related_name="users",
+        on_delete=fields.RESTRICT
+    )
+    is_active: bool = fields.BooleanField(default=False)  # default(faculty/doctor)
     last_login_at: datetime | None = fields.DatetimeField(null=True, default=None)  # nullable
 
     role_id: int
@@ -53,4 +55,8 @@ class User(CommonModel):
 
     @classmethod
     async def get_by_id(cls, user_id: int) -> User | None:
-        return await cls.get_or_none(id=user_id)  # .select_related("role")
+        return await cls.get_or_none(id=user_id)
+
+    @classmethod
+    async def get_by_id_with_role(cls, user_id: int) -> User | None:
+        return await cls.get_or_none(id=user_id).select_related("role")

@@ -25,20 +25,6 @@ class UserPasswordUpdateRequest(BaseModel):
     password: Annotated[str, Field(min_length=8, max_length=20, description="Password. ge(8), le(20)")]
 
 
-class DoctorProfileRegisterRequest(BaseModel):
-    hospital_id: Annotated[int | None, Field(default=None)]
-    license_number: int
-    specialty: Annotated[str | None, Field(default=None, max_length=20)]
-
-    model_config = FROZEN_CONFIG
-
-
-class UserHospitalRegisterRequest(BaseModel):
-    hospital_id: int
-
-    model_config = FROZEN_CONFIG
-
-
 class UserRoleResponse(BaseModel):
     id: int
 

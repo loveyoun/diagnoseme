@@ -22,6 +22,34 @@ class SignUpRequest(BaseModel):
     model_config = FROZEN_CONFIG
 
 
+class DoctorProfileRequest(BaseModel):
+    hospital_id: Annotated[int | None, Field(default=None)]
+    license_number: Annotated[str, Field(max_length=15)]
+    specialty: Annotated[str | None, Field(default=None, max_length=20)]
+
+    model_config = FROZEN_CONFIG
+
+
+class UserHospitalRequest(BaseModel):
+    hospital_id: int
+
+    model_config = FROZEN_CONFIG
+
+
+class DoctorSignUpRequest(BaseModel):
+    signup_request: SignUpRequest
+    doctor_profile_request: DoctorProfileRequest
+
+    model_config = FROZEN_CONFIG
+
+
+class UserHospitalSignUpRequest(BaseModel):
+    signup_request: SignUpRequest
+    user_hospital_request: UserHospitalRequest
+
+    model_config = FROZEN_CONFIG
+
+
 class SignInRequest(BaseModel):
     email: str
     password: str

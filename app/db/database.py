@@ -34,14 +34,21 @@ TORTOISE_ORM: dict[str, Any] = {
     "timezone": config.TZ,
 }
 
+# from tortoise import Tortoise
+# from fastapi import FastAPI
+# from tortoise.contrib.fastapi import register_tortoise
+#
+#
 # def initialize_tortoise(app: FastAPI) -> None:
 #     # import 타이밍 이슈: 모델 메타데이터를 선등록
 #     Tortoise.init_models(TORTOISE_APP_MODELS, "models")
-#     # app lifespan과 DB lifecycle 연결
+#
+#     # connection 초기화, app lifespan과 DB lifecycle 연결
+#     # 내부적으로 @app.on_event() 씀.
 #     register_tortoise(app, config=TORTOISE_ORM, generate_schemas=False)
 #
 #     # -----------------------
-#     @app.on_event("startup")
+#     @app.on_event("startup")  # deprecated
 #     async def verify_db():
 #         print("🔍 DB 연결 확인 시도 중...")
 #         conn = Tortoise.get_connection("default")
