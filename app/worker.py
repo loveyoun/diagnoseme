@@ -40,11 +40,13 @@ async def main():
     await worker.run()  # Blocking async
 
     # Non-blocking async
-    task = asyncio.create_task(worker.run())
     # 10초 뒤에 강제로 중단시켜보기 테스트
+    # task = asyncio.create_task(worker.run())
     # await asyncio.sleep(10)
     # task.cancel()
-    await task
+    # await task
+
+    await redis.aclose(close_connection_pool=True)
 
 
 if __name__ == "__main__":

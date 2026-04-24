@@ -5,7 +5,7 @@ from enum import StrEnum
 
 from tortoise import fields
 from tortoise.exceptions import IntegrityError
-from tortoise.transactions import in_transaction, F
+from tortoise.transactions import in_transaction
 
 from app.models import Hospital, User, Slot
 from app.models.commonmodel import CommonModel
@@ -50,7 +50,8 @@ class Appointment(CommonModel):
     hospital: fields.ForeignKeyRelation[Hospital] = fields.ForeignKeyField(
         "models.Hospital",
         related_name="appointments",
-        on_delete=fields.RESTRICT)
+        on_delete=fields.RESTRICT
+    )
     start_at: datetime = fields.DatetimeField()
     end_at: datetime = fields.DatetimeField()
     status: AppointmentStatus = fields.CharEnumField(enum_type=AppointmentStatus,
@@ -61,7 +62,7 @@ class Appointment(CommonModel):
     cancelled_by: fields.ForeignKeyRelation[User] | None = fields.ForeignKeyField(
         "models.User",
         related_name="cancelled_appointments",
-        on_delete=fields.SET_NULL,
+        on_delete=fields.CASCADE,
         null=True,
         default=None)
     cancel_reason: fields.ForeignKeyRelation[CancelReason] | None = fields.ForeignKeyField(
@@ -88,42 +89,46 @@ class Appointment(CommonModel):
         )
 
     @classmethod
-    async def get_by_idem_key(cls, idem_key: str) -> Appointment | None:
-        return await cls.get_or_none(idem_key=idem_key)
+    async def get_by_idem_key(
+            cls, idem_key: str, connection=None
+    ) -> Appointment | None:
+        """
+        트랜잭션(connection)이 넘어오면 해당 커넥션을 사용하고,
+        없으면 기본 DB를 사용하여 조회합니다.
+        """
+        return await cls.get_or_none(idem_key=idem_key, using_db=connection)
 
     @classmethod
     async def create_appointment(
             cls, idem_key: str, user_id: int, slot_id: int, memo: str | None
     ) -> Appointment:
-        # 1. 트랜잭션 시작
         async with in_transaction() as conn:
+            """
+            No RETURNING
             # [Step 1] 원자적 슬롯 차감 (SQL: UPDATE ... WHERE remains > 0)
-            # update()는 영향받은 로우의 개수를 반환합니다.
             updated_count = await Slot.filter(
                 id=slot_id,
                 remains__gt=0,
                 is_active=True
-            ).using_db(conn).update(remains=F("remains") - 1)
-
+            ).using_db(conn).update(remains=F("remains") - 1)  # 영향받은 로우의 개수
             if updated_count == 0:
                 # 슬롯이 없거나, 비활성이거나, 잔여량이 없는 경우
                 raise RuntimeError(f"Slot {slot_id} is unavailable or sold out")
 
             # [Step 2] 슬롯 정보 가져오기 (예약 생성을 위한 메타데이터)
             slot = await Slot.get(id=slot_id, using_db=conn)
+            """
 
-            sql = """
-                  UPDATE slots
-                  SET remains = remains - 1
-                  WHERE id = $1 \
-                    AND remains > 0 \
-                    AND is_active = True RETURNING id, hospital_id, start_at, end_at; \
-                  """
+            sql = """UPDATE slots
+                     SET remains = remains - 1
+                     WHERE id = $1
+                       AND remains > 0
+                       AND is_active = True RETURNING id, hospital_id, start_at, end_at; """
             result = await conn.execute_query_dict(sql, [slot_id])
-
             if not result:
-                raise ValueError("슬롯이 없거나 잔여 재고가 없습니다.")
-            slot_data=result[0]
+                raise RuntimeError(f"Slot {slot_id} is unavailable or sold out")
+
+            slot_data = result[0]
             try:
                 # [Step 3] 예약 생성 (Unique Constraint: user_id + slot_id 또는 idem_key)
                 # idem_key가 DB 수준의 Unique 제약조건으로 걸려 있어야 합니다.
@@ -132,9 +137,9 @@ class Appointment(CommonModel):
                     idem_status=IdempotencyStatus.SUCCESS,
                     user_id=user_id,
                     slot_id=slot_id,
-                    hospital_id=slot.hospital_id,
-                    start_at=slot.start_at,
-                    end_at=slot.end_at,
+                    hospital_id=slot_data["hospital_id"],
+                    start_at=slot_data["start_at"],
+                    end_at=slot_data["end_at"],
                     status=AppointmentStatus.CONFIRMED,
                     memo=memo,
                     using_db=conn
@@ -144,7 +149,7 @@ class Appointment(CommonModel):
             except IntegrityError:
                 # 중복 예약(idem_key 충돌 등) 발생 시 롤백됨 (수량은 트랜잭션에 의해 자동 복구)
                 # 만약 "ON CONFLICT DO NOTHING"처럼 처리하고 싶다면 여기서 기존 예약을 조회해 반환
-                existing = await Appointment.get_or_none(idem_key=idem_key, using_db=conn)
+                existing = await cls.get_by_idem_key(idem_key, connection=conn)
                 if existing:
                     return existing
                 raise RuntimeError("Concurrency conflict or Duplicate request")

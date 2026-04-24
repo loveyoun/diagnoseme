@@ -1,7 +1,6 @@
-from redis.asyncio import Redis
+from fastapi import Request
 
 from app.core.config import Config
-from app.core.redis import pool
 from app.core.security import PasswordHasher
 
 
@@ -15,6 +14,8 @@ def password_hasher() -> PasswordHasher:
 
 # def get_redis() -> Redis:
 #     return Redis(connection_pool=pool)
+def get_redis(request: Request):
+    return request.app.state.redis
 
 
 # 모듈 단위로 미리 주입

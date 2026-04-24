@@ -15,7 +15,7 @@ from redis.asyncio import Redis
 # Lua: 정원 체크 + 예약자 추가를 원자적으로 수행
 # SADD가 0이면 이미 예약됨, SCARD가 capacity 초과면 정원 초과
 RESERVE_SLOT_LUA = """
--- slot:{slot_id}:members
+-- key = slot:{slot_id}:members
 local key = KEYS[1]   
 local capacity    = tonumber(ARGV[1])
 local user_id     = ARGV[2]
@@ -43,16 +43,15 @@ end
 return 1  -- 예약 성공
 """
 
-'''
-Edge Case
-1. DB(Application) 레벨에서 최종 정원 체크 로직
-2. Redis processing -> Stream/Worker -> DB -> Redis success
-3. key EX 시간 고정
-redis.call('SADD', key, user_id)
-if redis.call('SCARD', key) == 1 then
-    redis.call('EXPIRE', key, ttl)
-end
-'''
+
+# Edge Case
+# 1. DB(Application) 레벨에서 최종 정원 체크 로직
+# 2. Redis processing -> Stream/Worker -> DB -> Redis success
+# 3. key EX 시간 고정
+# redis.call('SADD', key, user_id)
+# if redis.call('SCARD', key) == 1 then
+#     redis.call('EXPIRE', key, ttl)
+# end
 
 
 class SlotResult(IntEnum):
@@ -79,24 +78,29 @@ class AdmissionControl:
 
     def _idem_key(self, user_id: int, idem_key: str) -> str:
         # user_id + 클라이언트 제공키 로 네임스페이스 분리
-        # 다른 유저가 같은 idem key를 우연히 쓰는 경우 방지
+        # {다른 유저}:{같은 idem key}를 우연히 쓰는 경우 방지
         return f"idem:{user_id}:{idem_key}"
 
     async def check_idempotency(
-            self, user_id: int, idempotency_key: str
+            self, user_id: int, idem_key: str
     ) -> IdempotencyEntry | None:
         """
-        이미 처리된 요청이면 캐시된 결과 반환.
-        처리 중이면 'processing' 상태 반환 (클라이언트가 polling하도록 유도).
-        없으면 None 반환 → 신규 요청으로 처리.
+        이미 처리된 요청이면
+            캐시된 결과 반환.
+        처리 중이면
+            'processing' 상태, polling url 반환
+        없으면
+            None 반환 → 신규 요청으로 처리.
         """
-        raw = await self.redis.get(self._idem_key(user_id, idempotency_key))
+        raw = await self.redis.get(self._idem_key(user_id, idem_key))
         if raw is None:
             return None
-        data = json.loads(raw)  # json -> dict
+        data = json.loads(raw)  # str -> dict
         return IdempotencyEntry(status=data["status"], result=data.get("result"))
 
-    async def mark_processing(self, user_id: int, idempotency_key: str):
+    async def mark_processing(
+            self, user_id: int, idempotency_key: str
+    ):
         """요청을 처리 중 상태로 마킹 (짧은 TTL로 시작)"""
         key = self._idem_key(user_id, idempotency_key)
         payload = json.dumps({"status": "processing", "result": None})

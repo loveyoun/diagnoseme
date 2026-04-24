@@ -38,9 +38,9 @@ class AppointmentResponse(BaseModel):
     id: int
     idem_key: str
     idem_status: IdempotencyStatus
-
     user_id: int
     slot_id: int
+
     hospital_id: int
     start_at: datetime
     end_at: datetime

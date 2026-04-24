@@ -65,7 +65,8 @@ app.include_router(user.router)
 app.include_router(appointment.router)
 app.include_router(slot.router)
 
-# Tortoise ORM이 초기화 후 FastAPI와 연결
+
+# Tortoise ORM 초기화 후 FastAPI와 연결
 # initialize_tortoise(app)
 
 

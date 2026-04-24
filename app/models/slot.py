@@ -22,7 +22,8 @@ class Slot(CommonModel):
     hospital: fields.ForeignKeyRelation[Hospital] = fields.ForeignKeyField(
         "models.Hospital",
         related_name="slots",
-        on_delete=fields.RESTRICT)
+        on_delete=fields.RESTRICT
+    )
     doctor: fields.ForeignKeyRelation[DoctorProfile] | None = fields.ForeignKeyField(
         "models.Doctor",
         related_name="slots",
@@ -38,7 +39,7 @@ class Slot(CommonModel):
     end_at: datetime = fields.DatetimeField()
     slot_duration_minutes: int = fields.IntField(default=30)
 
-    # 기본은 deactivated
+    # 생성시 deactivated
     is_active: bool = fields.BooleanField(default=False)
 
     hospital_id: int
@@ -51,7 +52,7 @@ class Slot(CommonModel):
             # ("hospital", "start_at", "end_at"),
             # ("hospital", "doctor", "start_at", "end_at"),
             ("hospital", "is_active"),  # 병원 별 예약 가능 슬롯 조회
-            "type",  # normal/hot 필터링용
+            # "type",  # normal/hot 필터링용
         )
 
     @classmethod
@@ -61,7 +62,7 @@ class Slot(CommonModel):
     @classmethod
     async def create_slot(cls, slot_req: SlotRequest) -> Slot:
         # 딕셔너리로 변환
-        # Pydantic default != DB default
+        # exclude_unser: Pydantic default != DB default
         data = slot_req.model_dump(exclude_unset=True)
 
         # 필요한 경우 특정 값 가공
@@ -72,4 +73,10 @@ class Slot(CommonModel):
 
     @classmethod
     async def activate(cls, slot_id: int) -> None:
+        # 1 → 정상적으로 1개 row 업데이트됨
+        # 0 → 해당 id 없음 (또는 조건 불일치)
         await cls.filter(id=slot_id).update(is_active=True)
+
+    async def activate_with_instance(self) -> None:
+        self.is_active = True
+        await self.save(update_fields=["is_active"])

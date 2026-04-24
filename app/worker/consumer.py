@@ -11,7 +11,6 @@ from app.models import Appointment
 logger = logging.getLogger(__name__)
 
 GROUP_NAME = "appointment_workers"
-
 CLAIM_IDLE_MS = 30_000  # 30초 이상 pending이면 stale
 MAX_RETRY = 3  # 초과 시 DLQ로
 DLQ_STREAM = "appointments:dlq"
@@ -62,6 +61,7 @@ class AppointmentWorker:
             logger.warning(f"[REJECT] msg={msg_id} logic_error={e}")
             await self.redis.setex(f"result:{data['idem_key']}", 3600, json.dumps({"error": str(e)}))
             await self.redis.xack(STREAM_KEY, GROUP_NAME, msg_id)
+            # ← admission.mark_complete(user_id, idem_key, {"error": ...}, success=False)
         except asyncio.CancelledError:
             logger.info("작업 중단 요청을 받았습니다.")
             raise  # 상위 루프(run)로 알림
@@ -154,8 +154,13 @@ class AppointmentWorker:
                     continue
 
                 # retry_count 증가 후 재처리
-                data["_retry"] = str(retry_count + 1)
+                data["_retry"] = str(retry_count + 1)  # 로컬 dict만 수정
+                # ← Redis stream에 업데이트하는 코드 없음
+                # 해결: xdel + xadd로 메시지 교체하거나 별도 카운터 키 사용
+
                 try:
+                    # XREADGROUP: bytes.decode()
+                    # XAUTOCLAIM: str
                     await self.process_message(msg_id.decode(), data)
                     await self.redis.xack(STREAM_KEY, GROUP_NAME, msg_id)
                 except Exception:

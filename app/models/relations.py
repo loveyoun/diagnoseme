@@ -8,6 +8,12 @@ from app.models import User, Hospital, UserRole
 from app.models.commonmodel import CommonModel
 
 
+class RequestStatus(StrEnum):
+    PENDING = "pending"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+
+
 class DoctorProfile(CommonModel):
     id: int = fields.BigIntField(primary_key=True)
 
@@ -29,6 +35,9 @@ class DoctorProfile(CommonModel):
     license_number: str = fields.CharField(max_length=15)
     specialty: str | None = fields.CharField(max_length=20, null=True, default=True)
     is_active: bool = fields.BooleanField(default=False)  # 활동 여부
+
+    status: RequestStatus = fields.CharEnumField(enum_type=RequestStatus,
+                                                 default=RequestStatus.PENDING)
 
     user_id: int
     hospital_id: int | None
@@ -57,12 +66,7 @@ class UserHospital(CommonModel):
 
     class Meta:
         table = "user_hospitals"
-
-
-class RequestStatus(StrEnum):
-    PENDING = "pending"
-    APPROVED = "approved"
-    REJECTED = "rejected"
+        unique_together = (("user", "hospital"),)
 
 
 class RoleRequest(CommonModel):
@@ -74,9 +78,9 @@ class RoleRequest(CommonModel):
         related_name="role_request",
         on_delete=fields.CASCADE,
     )
-    role: fields.OneToOneRelation[UserRole] = fields.OneToOneField(
+    role: fields.ForeignKeyRelation[UserRole] = fields.ForeignKeyField(
         "models.UserRole",
-        related_name="role_request",
+        related_name="role_requests",
         on_delete=fields.CASCADE,
     )
     hospital: fields.ForeignKeyRelation[Hospital] = fields.ForeignKeyField(

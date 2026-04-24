@@ -1,11 +1,12 @@
 import asyncio
+import time
 from datetime import datetime
-from urllib.request import Request
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, status, Depends
 from redis.asyncio import Redis
 from tortoise.transactions import in_transaction
 
+from app.apis.slot import SLOT_MEMBER_BUFFER_SECONDS
 from app.core import get_redis
 from app.core.admission_control import AdmissionControl, SlotResult
 from app.core.rate_limiter import TokenBucketRateLimiter
@@ -21,16 +22,17 @@ from app.schemas.appointment import (
 
 router = APIRouter(prefix="/appointments", tags=["Appointments"])
 
+
 # Redis connection pool
 # redis_client: Redis = Redis(host=config.REDIS_HOST, port=config.REDIS_PORT, decode_responses=True)
-redis_client: Redis = get_redis()
+# redis: Redis = get_redis()
 
 
 @router.post("/v1", response_model=AppointmentResponse, status_code=status.HTTP_201_CREATED)
 async def create_appointment(
         appt_req: AppointmentRequest,
         user_id: int,
-        # user: User = Depends(get_current_user),
+        redis: Redis = Depends(get_redis)
 ) -> AppointmentResponse:
     user = await User.get_by_id(user_id=user_id)
 
@@ -48,12 +50,12 @@ async def create_appointment(
     lock_value: str = f"{user.id}:{appt_req.idem_key}"
 
     # Try to acquire lock for 10 seconds
-    acquired: bool = await redis_client.set(lock_key, lock_value, ex=10, nx=True)
+    acquired: bool = await redis.set(lock_key, lock_value, ex=10, nx=True)
     if not acquired:
         # Retry logic or wait
         for _ in range(5):
             await asyncio.sleep(0.1)
-            acquired = await redis_client.set(lock_key, lock_value, ex=10, nx=True)
+            acquired = await redis.set(lock_key, lock_value, ex=10, nx=True)
             if acquired:
                 break
         else:
@@ -93,9 +95,9 @@ async def create_appointment(
 
     finally:
         # Release lock only if we were the one who held it
-        current_lock_val: str | None = await redis_client.get(lock_key)
+        current_lock_val: str | None = await redis.get(lock_key)
         if current_lock_val == lock_value:
-            await redis_client.delete(lock_key)
+            await redis.delete(lock_key)
 
 
 # ─────────────────────────────────────────────
@@ -109,13 +111,16 @@ async def create_appointment(
         appt_req: AppointmentRequest,
         user_id: int,
         # user: User = Depends(get_current_user),
-        request: Request,
+        redis: Redis = Depends(get_redis)
 ) -> dict[str, str]:
     slot_id: int = appt_req.slot_id
-    idem_key: str = appt_req.idem_key
-    user = await User.get_by_id(user_id=user_id)
+    slot: Slot | None = Slot.get_by_id(slot_id)
+    if not slot:
+        raise HTTPException(status_code=404, detail="Slot not found")
 
-    redis: Redis = redis_client
+    idem_key: str = appt_req.idem_key
+
+    """ 싱글톤으로 만들기 """
     global_limiter = TokenBucketRateLimiter(redis, capacity=1000, refill_rate=100)
     user_limiter = TokenBucketRateLimiter(redis, capacity=10, refill_rate=1)
     admission = AdmissionControl(redis)
@@ -127,16 +132,36 @@ async def create_appointment(
     cached = await admission.check_idempotency(user_id, idem_key)
     if cached:
         if cached.status == "processing":
-            return {"status": "processing", "poll_url": f"/reservations/{idem_key}"}
+            return {
+                "status": "processing",
+                "poll_url": f"/reservations/{idem_key}",
+                "sse_url": f"/appointments/{idem_key}/stream"
+            }
         return {"status": cached.status, **cached.result}
 
     # ── Step 2: User rate limit (두 개 중 하나라도 거절 시 차단)─────────────────
     await user_limiter.enforce(f"ratelimit:user:{user_id}")
 
     # ── Step 3: 슬롯 정원/중복 체크 ──────────────
-    slot_capacity = 3  # 슬롯당 최대 3명 (설정값으로 분리 권장)
-    slot_ttl = 3600  # 슬롯 만료까지 1시간 (실제론 DB에서 조회)
+    data = await redis.hgetall(f"slot:{slot_id}")
+    """ Cache-aside -> SlotService화 """
+    if not data:
+        key = f"slot:{slot_id}"
+        slot_capacity = slot.capacity
+        slot_ttl = int(slot.end_at.timestamp()) + SLOT_MEMBER_BUFFER_SECONDS - int(time.time())
+        if slot_ttl <= 0:
+            raise HTTPException(status_code=400, detail="Slot already expired")
+        async with redis.pipeline() as pipe:
+            pipe.hset(key, mapping={
+                "capacity": slot_capacity,
+                "ttl": slot_ttl
+            })
+            pipe.expire(key, slot_ttl)
+            await pipe.execute()
+    """"""
 
+    slot_capacity = int(data["capacity"])
+    slot_ttl = int(data["ttl"])
     slot_result = await admission.try_reserve_slot(
         slot_id, user_id, slot_capacity, slot_ttl
     )
