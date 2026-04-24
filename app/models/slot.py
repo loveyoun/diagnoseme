@@ -62,7 +62,9 @@ class Slot(CommonModel):
     @classmethod
     async def create_slot(cls, slot_req: SlotRequest) -> Slot:
         # 딕셔너리로 변환
-        # exclude_unser: Pydantic default != DB default
+        # exclude_unset:
+        # No in pydantic
+        # pydantic default != DB default
         data = slot_req.model_dump(exclude_unset=True)
 
         # 필요한 경우 특정 값 가공
