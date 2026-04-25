@@ -14,6 +14,7 @@ def password_hasher() -> PasswordHasher:
 
 # def get_redis() -> Redis:
 #     return Redis(connection_pool=pool)
+
 def get_redis(request: Request):
     return request.app.state.redis
 
