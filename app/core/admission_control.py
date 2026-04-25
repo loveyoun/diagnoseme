@@ -113,7 +113,13 @@ class AdmissionControl:
     async def mark_complete(
             self, user_id: int, idem_key: str, result: dict, success: bool = True
     ):
-        """Worker가 완료 후 호출 → TTL을 24h로 늘리고 결과 저장"""
+        """
+        Worker가 완료 후 호출 → TTL을 24h로 늘리고 결과 저장
+        SUCCESS
+            {"appointment_id": appt.id, "slot_id": slot_id}
+        FAILED
+            {"error": str(e)}
+        """
         key = self._idem_key(user_id, idem_key)
         payload = json.dumps({
             "status": "success" if success else "failed",

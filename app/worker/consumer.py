@@ -12,15 +12,20 @@ logger = logging.getLogger(__name__)
 
 GROUP_NAME = "appointment_workers"
 CLAIM_IDLE_MS = 30_000  # 30초 이상 pending이면 stale
-MAX_RETRY = 3  # 초과 시 DLQ로
+MAX_RETRY = 3  # 초과 시 DLQ
 DLQ_STREAM = "appointments:dlq"
 
 
+class BusinessError(Exception):
+    """비즈니스 로직 실패 (재시도 불필요한 예외)"""
+    pass
+
+
 class AppointmentWorker:
-    def __init__(self, redis: Redis, admission: AdmissionControl, consumer_name:str):
+    def __init__(self, redis: Redis, admission: AdmissionControl, consumer_name: str):
         self.redis = redis
         self.admission = admission
-        self.consumer_name=consumer_name
+        self.consumer_name = consumer_name
 
     async def setup(self):
         """ Consumer Group 생성 """
@@ -41,35 +46,39 @@ class AppointmentWorker:
         try:
             ''' Integrity Handling '''
             # 1. DB 저장
-            # Redis session, DB session 연결
-            appt = await Appointment.create_appointment(idem_key=idem_key,
-                                                        user_id=user_id,
-                                                        slot_id=slot_id,
-                                                        memo=data.get("memo"))
+            appt = await Appointment.create_appointment(
+                idem_key=idem_key,
+                user_id=user_id,
+                slot_id=slot_id,
+                memo=data.get("memo"),  # None
+            )
             # 2. 완료 마킹
             result = {"appointment_id": appt.id, "slot_id": slot_id}
-            await self.admission.mark_complete(user_id, idem_key, result)
-            await self.redis.setex(f"result:{idem_key}", 3600, json.dumps(result))
+            await self.admission.mark_complete(user_id, idem_key, result)  # success
+            await self.redis.setex(f"result:{idem_key}", 3600, json.dumps(result))  # 1h
 
             # 3. 성공 시 로그
             logger.info(f"[OK] msg={msg_id} user={user_id} slot={slot_id}")
 
         except (ValueError, RuntimeError) as e:
             # [중요] 비즈니스 실패: 슬롯 없음/비활성 등은 다시 시도해도 결과가 같음
-            # 따라서 결과를 '실패'로 저장하고 ACK를 보내 PEL에서 제거해야 함
-            # '실패용 스트림'으로 옮기는 처리를 합니다.
+            # → 실패 결과 저장 + admission 상태 갱신 후 ACK
             logger.warning(f"[REJECT] msg={msg_id} logic_error={e}")
-            await self.redis.setex(f"result:{data['idem_key']}", 3600, json.dumps({"error": str(e)}))
-            await self.redis.xack(STREAM_KEY, GROUP_NAME, msg_id)
-            # ← admission.mark_complete(user_id, idem_key, {"error": ...}, success=False)
+
+            error_result = {"error": str(e)}
+            await self.redis.setex(f"result:{idem_key}", 3600, json.dumps(error_result))
+            await self.admission.mark_complete(user_id, idem_key, error_result, success=False)
+            raise BusinessError(str(e))  # ACK는 run()에서 한 번만 수행
         except asyncio.CancelledError:
             logger.info("작업 중단 요청을 받았습니다.")
             raise  # 상위 루프(run)로 알림
+        except BusinessError:
+            raise
         except Exception as e:
             # 시스템 실패: DB 다운, 네트워크 에러 등 (다시 시도하면 성공할 수도 있음)
-            # ACK를 하지 않고 raise하여 상위 루프에서 PEL에 남기도록 유도
+            # ACK를 하지 않고 raise -> 상위 루프에서 PEL에 남기도록 유도
             logger.error(f"[SYSTEM ERROR] msg={msg_id} error={e}")
-            raise  # ACK 안 함 → 해당 소비자의 PEL에 잔류
+            raise
 
     async def run(self):
         """메인 consume 루프"""
@@ -93,14 +102,14 @@ class AppointmentWorker:
                         for msg_id, raw in msgs:
                             data = {k.decode(): v.decode() for k, v in raw.items()}
                             try:
-                                """ slot remains 차감 """
                                 # 실제 예약 로직 수행
                                 await self.process_message(msg_id.decode(), data)
                                 # 성공 시에만 ACK
                                 await self.redis.xack(STREAM_KEY, GROUP_NAME, msg_id)
+                            except BusinessError:
+                                # 비즈니스 에러도 ACK (재시도 불필요)
+                                await self.redis.xack(STREAM_KEY, GROUP_NAME, msg_id)
                             except Exception:
-                                # process_message에서 raise된 시스템 에러가 여기로 옴
-                                # ACK를 호출하지 않으므로 자동으로 PEL에 잔류
                                 continue  # PEL 잔류, recovery worker가 처리
 
                 # 주기적으로 stale 메시지 복구 시도
@@ -135,13 +144,18 @@ class AppointmentWorker:
 
             for msg_id, raw in claimed_msgs:
                 data = {k.decode(): v.decode() for k, v in raw.items()}
-                retry_count = int(data.get("_retry", "0"))
 
+                # retry 카운트를 Redis 별도 키로 관리
+                retry_key = f"retry_count:{msg_id}"
+                retry_count = int((await self.redis.get(retry_key)) or 0)
+
+                # Dead Letter Queue로 이동
                 if retry_count >= MAX_RETRY:
-                    # Dead Letter Queue로 이동
                     logger.warning(f"[DLQ] msg={msg_id} exceeded max retry")
+
                     await self.redis.xadd(DLQ_STREAM, {**raw, b"_failed_id": msg_id})
                     await self.redis.xack(STREAM_KEY, GROUP_NAME, msg_id)
+                    await self.redis.delete(retry_key)
 
                     # 슬롯 예약 롤백 (정원에서 제거)
                     await self.admission.release_slot(data["slot_id"], data["user_id"])
@@ -154,17 +168,24 @@ class AppointmentWorker:
                     continue
 
                 # retry_count 증가 후 재처리
-                data["_retry"] = str(retry_count + 1)  # 로컬 dict만 수정
-                # ← Redis stream에 업데이트하는 코드 없음
+                # data["_retry"] = str(retry_count + 1)  # 로컬 dict만 수정
+                # Redis stream에 업데이트하는 코드 없음
                 # 해결: xdel + xadd로 메시지 교체하거나 별도 카운터 키 사용
 
+                await self.redis.setex(retry_key, 3600, retry_count + 1)
+
+                msg_id_str = msg_id if isinstance(msg_id, str) else msg_id.decode()
                 try:
                     # XREADGROUP: bytes.decode()
                     # XAUTOCLAIM: str
-                    await self.process_message(msg_id.decode(), data)
+                    await self.process_message(msg_id_str, data)
                     await self.redis.xack(STREAM_KEY, GROUP_NAME, msg_id)
+                    await self.redis.delete(retry_key)  # 성공 시 카운터 정리
+                except BusinessError:  # No retry
+                    await self.redis.xack(STREAM_KEY, GROUP_NAME, msg_id)
+                    await self.redis.delete(retry_key)
                 except Exception:
-                    logger.warning(f"[RETRY {retry_count + 1}] msg={msg_id}")
+                    logger.warning(f"[RETRY {retry_count + 1}] msg={msg_id_str}")
 
         except Exception as e:
             logger.debug(f"Recovery check error (non-critical): {e}")
