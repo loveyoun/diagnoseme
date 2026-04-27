@@ -1,15 +1,12 @@
 import json
-from typing import Any
 
 from redis.asyncio import Redis
-
-from app.core.redis import redis_client
 
 PERMISSION_CACHE_TTL: int = 60
 
 
 class PermissionCacheService:
-    def __init__(self, redis: Redis = redis_client) -> None:
+    def __init__(self, redis: Redis) -> None:
         self._redis: Redis = redis
 
     def _key(self, user_id: int) -> str:

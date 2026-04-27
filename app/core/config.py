@@ -39,3 +39,22 @@ class Config(BaseSettings):
     REDIS_HOST: str
     REDIS_PORT: int = 6379
     REDIS_PASSWORD: str | int | None = None
+
+    # Gemini API 키
+    AI_MODEL: str
+    AI_API_KEY: str
+
+    # -------------------------
+    # 공공데이터포털 API 키
+    # 국립암센터 API(B551172)와 국가암정보센터 API(15122210 등)는
+    # 같은 포털에서 발급되지만 서비스별로 별도 신청이 필요합니다.
+    # -------------------------
+    DATA_GO_KR_API_KEY: str = "YOUR_DATA_GO_KR_API_KEY"
+    NCC_API_BASE_URL: str = "http://apis.data.go.kr/B551172"
+    NCC_CANCER_INFO_BASE_URL: str = "http://apis.data.go.kr/1262430"  # 국가암정보센터
+
+    # -------------------------
+    # ChromaDB (벡터 DB) 설정
+    # 로컬 디스크에 벡터 데이터를 영구 저장하는 경로
+    # -------------------------
+    CHROMA_PERSIST_DIR: str = "./chroma_db"
